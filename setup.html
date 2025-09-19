@@ -1,29 +1,47 @@
 <body>
-  <h1>Setup Nama Tim</h1>
+  <h1>Setup Game</h1>
+  <input id="gameId" placeholder="Game ID (4 digit)"/>
+  <br/>
   <input id="teamName" placeholder="Nama Tim"/>
+  <br/>
   <button onclick="start()">Mulai Game</button>
 
   <script type="module">
-    import { ref, set } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { ref, set, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
 
     async function start() {
+      const gameId = document.getElementById("gameId").value.trim();
       const team = document.getElementById("teamName").value.trim();
-      if (!team) { alert("Isi nama tim!"); return; }
 
-      const gameId = Date.now().toString();
+      if (!/^\d{4}$/.test(gameId)) {
+        alert("Game ID harus 4 digit angka!");
+        return;
+      }
+      if (!team) {
+        alert("Isi nama tim!");
+        return;
+      }
 
-      const text = await fetch("words.txt").then(r=>r.text());
-      const all = text.split("\n").map(w=>w.trim()).filter(Boolean);
-      const selected = all.sort(()=>Math.random()-0.5).slice(0,4);
+      // cek apakah gameId sudah ada
+      const snap = await get(ref(db, `games/${gameId}/words`));
 
-      await set(ref(db, `games/${gameId}`), {
-        teamName: team,
-        words: selected,
-        rounds: {}
-      });
+      // kalau belum ada, host generate words
+      if (!snap.exists()) {
+        const text = await fetch("words.txt").then(r=>r.text());
+        const all = text.split("\n").map(w=>w.trim()).filter(Boolean);
+        const selected = all.sort(()=>Math.random()-0.5).slice(0,4);
 
-      console.log("Data tersimpan:", gameId, selected);
+        await set(ref(db, `games/${gameId}`), {
+          words: selected,
+          rounds: {}
+        });
+        console.log("Game baru dibuat dengan kata:", selected);
+      } else {
+        console.log("Join ke game existing:", gameId);
+      }
+
+      // redirect ke words.html
       window.location.href = `words.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
     }
 
