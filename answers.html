@@ -133,17 +133,21 @@
     // watch currentRound → reset UI and bind per-round watcher
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
-      currentRound = snap.val();
-      hdr.textContent = `Round ${currentRound}`;
-      resetFormUI();
-      bindThisRoundWatcher(currentRound);
+      const newRound = snap.val();
+      if (newRound !== currentRound) {
+        currentRound = newRound;
+        hdr.textContent = `Round ${currentRound}`;
+        resetFormUI();
+        bindThisRoundWatcher(currentRound);
+      }
     });
 
     // per-round watcher: lock submit if this team already submitted
     function bindThisRoundWatcher(round) {
       if (roundUnsub) roundUnsub();
       roundUnsub = onValue(roundRef(gameId, round), (snap) => {
-        if (!snap.exists()) { resetFormUI(); return; }
+        // if (!snap.exists()) { resetFormUI(); return; }
+        if (!snap.exists()) { return; }
         const r = snap.val() || {};
         const already = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3;
         submitBtn.disabled = !!already;
