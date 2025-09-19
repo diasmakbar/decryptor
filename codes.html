@@ -7,31 +7,35 @@
   <style>
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
     h1{margin:10px 0}
-    .card{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:14px;margin:12px auto;max-width:420px}
-    .word{background:#333;padding:8px;border-radius:8px;margin:6px 0;font-weight:700}
+    .card{background:#0b3fad;border:1px solid #154bc2;border-radius:12px;padding:14px;margin:12px auto;max-width:520px}
+    .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:10px;border-radius:10px;margin:8px 0}
     button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
     #genBtn{background:#22c55e;color:#111}
     #readyBtn{background:#3b82f6;color:#fff}
     #code{font-size:36px;font-weight:800;letter-spacing:.25em;margin:14px 0}
     .status{opacity:.9;margin-top:12px}
+    .scoreBoard{background:#222;padding:10px;border-radius:10px;max-width:520px;margin:10px auto}
   </style>
 </head>
 <body>
   <h1 id="hdr">Round</h1>
+
   <div id="wordBox" class="card">Loading kata…</div>
+
   <div id="code">— — —</div>
   <div>
     <button id="genBtn">Generate Code</button>
     <button id="readyBtn" disabled>Ready for Next Round</button>
   </div>
   <div id="readyState" class="status"></div>
+  <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
 
   <script type="module">
     import { onValue, set, get, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
-      currentRoundRef, teamsRef, codeRef, teamOrderRef, teamRef,
-      getHostTeam, generateUniqueCode,
+      currentRoundRef, teamsRef, codeRef, teamOrderRef, teamRef, gameRef,
+      getHostTeam, getOtherTeam, generateUniqueCode,
       setBtnEnabled, renderReadyStatus, advanceRoundAndResetReady,
       mountWinnerBanner
     } from "./game-utils.js";
@@ -51,16 +55,26 @@
     const genBtn = document.getElementById("genBtn");
     const readyBtn = document.getElementById("readyBtn");
     const readyState = document.getElementById("readyState");
+    const scoreBox = document.getElementById("scoreBox");
 
-    // tampilkan kata tim
+    // tampilkan kata tim (4 kotak biru, teks putih tebal, font gede)
     const wordBox = document.getElementById("wordBox");
-    const snap = await get(teamRef(gameId, myTeam));
-    if (snap.exists()) {
-      const { words = [] } = snap.val() || {};
+    const wSnap = await get(teamRef(gameId, myTeam));
+    if (wSnap.exists()) {
+      const { words = [] } = wSnap.val() || {};
       wordBox.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
     } else {
       wordBox.textContent = "Kata tim tidak ditemukan.";
     }
+
+    // scoreboard live
+    onValue(gameRef(gameId), (snap) => {
+      if (!snap.exists()) return;
+      const game = snap.val();
+      const teams = Object.keys(game.teams || {});
+      const scores = game.teams || {};
+      scoreBox.textContent = `Scoreboard → ${teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ")}`;
+    });
 
     // listen teamOrder
     onValue(teamOrderRef(gameId), (snap) => {
@@ -77,38 +91,44 @@
       updateRoleUI();
     });
 
-    // listen code untuk ronde ini
-    function attachCodeListener() {
+    // listen code → TAMPILKAN HANYA KE HOST
+    function bindCodeListener() {
       onValue(codeRef(gameId, currentRound), (snap) => {
-        if (snap.exists()) {
+        const host = getHostTeam(teamOrder, currentRound);
+        const isHost = host && myTeam === host;
+        const hasCode = snap.exists();
+        if (isHost && hasCode) {
           codeBox.textContent = snap.val().join(" - ");
-          setBtnEnabled(readyBtn, true);
         } else {
-          codeBox.textContent = "— — —";
-          setBtnEnabled(readyBtn, false);
+          codeBox.textContent = "— — —"; // non-host tidak pernah lihat kode
         }
+        // ready aktif untuk semua tim SETELAH kode dibuat
+        setBtnEnabled(readyBtn, hasCode);
+        // coba skor jika kedua tim sudah submit (idempotent)
         maybeScoreCurrentRound(gameId);
       });
     }
-    attachCodeListener();
+    bindCodeListener();
 
-    // listen ready states
+    // ready state + auto advance
     onValue(teamsRef(gameId), async (snap) => {
       const teamsObj = snap.val() || {};
       renderReadyStatus(readyState, teamsObj);
-      const allReady = Object.values(teamsObj).length >= 2 && Object.values(teamsObj).every(t => t.ready);
-      if (allReady) {
-        await advanceRoundAndResetReady(gameId, currentRound + 1, teamsObj);
-      }
+      const teamCount = Object.values(teamsObj).length;
+      const allReady = teamCount >= 2 && Object.values(teamsObj).every(t => t.ready);
+      if (allReady) await advanceRoundAndResetReady(gameId, currentRound + 1, teamsObj);
     });
 
     function updateRoleUI() {
       const host = getHostTeam(teamOrder, currentRound);
       const isHost = host && myTeam === host;
-      setBtnEnabled(genBtn, isHost);
-      if (!isHost) {
-        setBtnEnabled(readyBtn, false); // non-host tunggu host generate
-      }
+      // hanya host yang bisa generate; non-host tidak
+      setBtnEnabled(genBtn, false);
+      get(codeRef(gameId, currentRound)).then(snap => {
+        const hasCode = snap.exists();
+        if (isHost) setBtnEnabled(genBtn, !hasCode);
+        // readyBtn enable/disable di listener code
+      });
     }
 
     genBtn.addEventListener("click", async () => {

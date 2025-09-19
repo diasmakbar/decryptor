@@ -7,9 +7,9 @@
   <style>
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:20px}
     h1{text-align:center}
-    .card{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:14px;margin:12px auto;max-width:420px;text-align:left}
-    .word{background:#333;padding:8px;border-radius:8px;margin:6px 0;font-weight:700}
-    form{max-width:600px;margin:0 auto}
+    .card{background:#0b3fad;border:1px solid #154bc2;border-radius:12px;padding:14px;margin:12px auto;max-width:520px;text-align:left}
+    .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:10px;border-radius:10px;margin:8px 0}
+    form{max-width:640px;margin:0 auto}
     .row{display:grid;grid-template-columns:1fr 120px;gap:8px;margin:8px 0}
     input,button{padding:10px;font-size:16px;border-radius:8px;border:1px solid #333}
     button{background:#3b82f6;color:#fff;border:none;margin-top:8px}
@@ -19,11 +19,12 @@
     .teamRow{display:grid;grid-template-columns:1fr 1fr;gap:20px}
     .teamBox{background:#111;padding:12px;border-radius:8px}
     .teamBox b{display:block;margin-bottom:6px}
-    .scoreBoard{background:#222;padding:12px;border-radius:12px;text-align:center;font-weight:700;margin:20px auto;max-width:400px}
+    .scoreBoard{background:#222;padding:12px;border-radius:12px;text-align:center;font-weight:700;margin:20px auto;max-width:520px}
   </style>
 </head>
 <body>
   <h1 id="title">Answers</h1>
+
   <div id="wordBox" class="card">Loading kata…</div>
 
   <form id="answerForm">
@@ -61,18 +62,18 @@
     document.getElementById("title").textContent = `Team ${team}`;
     mountWinnerBanner(gameId);
 
-    let currentRound = 1;
-    let teamOrder = [];
-
-    // tampilkan kata tim
+    // tampilkan kata tim (4 kotak biru, teks putih tebal besar)
     const wordBox = document.getElementById("wordBox");
-    const snap = await get(teamRef(gameId, team));
-    if (snap.exists()) {
-      const { words = [] } = snap.val() || {};
+    const wSnap = await get(teamRef(gameId, team));
+    if (wSnap.exists()) {
+      const { words = [] } = wSnap.val() || {};
       wordBox.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
     } else {
       wordBox.textContent = "Kata tim tidak ditemukan.";
     }
+
+    let currentRound = 1;
+    let teamOrder = [];
 
     onValue(currentRoundRef(gameId), (snap) => {
       if (snap.exists()) currentRound = snap.val();
@@ -96,10 +97,11 @@
       await set(ref(db, `games/${gameId}/rounds/${currentRound}/guesses/${team}`), guesses);
 
       e.target.reset();
+      // kalau kedua tim sudah submit, scoring.js akan set revealed=true + update skor
       maybeScoreCurrentRound(gameId);
     });
 
-    // scoreboard & history
+    // scoreboard & history (HANYA tampilkan round yang revealed)
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const game = snap.val();
@@ -107,36 +109,42 @@
       const teams = Object.keys(game.teams || {});
       const scores = game.teams || {};
 
+      // scoreboard
       document.getElementById("scoreBox").textContent =
         `Scoreboard → ${teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ")}`;
 
+      // history
       const body = document.getElementById("history");
       body.innerHTML = "";
 
-      Object.keys(rounds).sort((a,b)=>Number(a)-Number(b)).forEach((num) => {
-        const r = rounds[num];
-        const code = Array.isArray(r.code) ? r.code.join(" - ") : "-";
-        const host = getHostTeam(teamOrder, Number(num));
+      Object.keys(rounds)
+        .map(n => Number(n)).sort((a,b)=>a-b)
+        .forEach((num) => {
+          const r = rounds[num];
+          if (r.revealed !== true) return; // BELUM reveal → jangan tampilkan apa-apa
 
-        let html = `<div class="roundCard">
-                      <div class="roundHeader">Round ${num} - Giliran Team ${host} speak up!</div>
-                      <div class="teamRow">`;
+          const code = Array.isArray(r.code) ? r.code.join(" - ") : "-";
+          const host = getHostTeam(teamOrder, num);
 
-        teams.forEach(t => {
-          const clues   = r.clues?.[t]   ? r.clues[t].join(" | ")   : "-";
-          const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
-          const answers = (r.guesses?.[t]) ? code : "-";
-          html += `<div class="teamBox">
-                     <b>${t}</b>
-                     Clues: ${clues}<br/>
-                     Guesses: ${guesses}<br/>
-                     Answers: ${answers}
-                   </div>`;
+          let html = `<div class="roundCard">
+                        <div class="roundHeader">Round ${num} - Giliran Team ${host} speak up!</div>
+                        <div class="teamRow">`;
+
+          teams.forEach(t => {
+            const clues   = r.clues?.[t]   ? r.clues[t].join(" | ")   : "-";
+            const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
+            const answers = (r.guesses?.[t]) ? code : "-";
+            html += `<div class="teamBox">
+                       <b>${t}</b>
+                       Clues: ${clues}<br/>
+                       Guesses: ${guesses}<br/>
+                       Answers: ${answers}
+                     </div>`;
+          });
+
+          html += `</div></div>`;
+          body.innerHTML += html;
         });
-
-        html += `</div></div>`;
-        body.innerHTML += html;
-      });
     });
   </script>
 </body>
