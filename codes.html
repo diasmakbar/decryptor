@@ -1,76 +1,24 @@
 <body>
   <h1 id="roundTitle"></h1>
-  <button onclick="genCode()">Generate Code</button>
+  <button id="genBtn">Generate Code</button>
   <div id="codeBox">— — —</div>
 
-  <form id="clueForm">
-    <div>
-      <input placeholder="Clue 1" name="clue1"/>
-      <input placeholder="Tebakan Angka" name="guess1"/>
-    </div>
-    <div>
-      <input placeholder="Clue 2" name="clue2"/>
-      <input placeholder="Tebakan Angka" name="guess2"/>
-    </div>
-    <div>
-      <input placeholder="Clue 3" name="clue3"/>
-      <input placeholder="Tebakan Angka" name="guess3"/>
-    </div>
-    <button type="submit">Submit</button>
-  </form>
-
-  <h2>History</h2>
-  <div id="historyBox"></div>
-
   <script type="module">
-    import { ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { ref, set } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
 
     const params = new URLSearchParams(window.location.search);
-    const gameId = params.get("gameId");
-    const team = params.get("team");
+    const gameId = params.get("gameId") || "test";
     let round = 1;
 
     document.getElementById("roundTitle").textContent = "Round " + round;
 
-    function genCode() {
+    document.getElementById("genBtn").addEventListener("click", () => {
       const code = Array.from({length:3},()=>Math.floor(Math.random()*4)+1);
       set(ref(db, `games/${gameId}/rounds/${round}/code`), code);
-    }
-
-    onValue(ref(db, `games/${gameId}/rounds/${round}/code`), snap => {
-      if (snap.exists()) {
-        document.getElementById("codeBox").textContent = snap.val().join(" - ");
-      }
-    });
-
-    document.getElementById("clueForm").addEventListener("submit", async e=>{
-      e.preventDefault();
-      const data = new FormData(e.target);
-      const clues = [data.get("clue1"), data.get("clue2"), data.get("clue3")];
-      const guesses = [data.get("guess1"), data.get("guess2"), data.get("guess3")];
-
-      await set(ref(db, `games/${gameId}/rounds/${round}/clues/${team}`), clues);
-      await set(ref(db, `games/${gameId}/rounds/${round}/guesses/${team}`), guesses);
-
+      document.getElementById("codeBox").textContent = code.join(" - ");
       round++;
       document.getElementById("roundTitle").textContent = "Round " + round;
-      e.target.reset();
-    });
-
-    onValue(ref(db, `games/${gameId}/rounds`), snap=>{
-      if (snap.exists()) {
-        const rounds = snap.val();
-        const div = document.getElementById("historyBox");
-        div.innerHTML = "";
-        Object.entries(rounds).forEach(([num,data])=>{
-          div.innerHTML += `<div><b>Round ${num}</b><br/>
-            Code: ${data.code ? data.code.join("-") : "-"}<br/>
-            Clues: ${JSON.stringify(data.clues || {})}<br/>
-            Guesses: ${JSON.stringify(data.guesses || {})}
-          </div><hr/>`;
-        });
-      }
     });
   </script>
 </body>
