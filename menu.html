@@ -6,31 +6,49 @@
   <title>Decryptor - Menu</title>
   <style>
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
-    h1{margin-bottom:30px}
-    .btn{display:block;margin:14px auto;padding:14px 20px;font-size:18px;
-         border:none;border-radius:10px;max-width:300px;width:90%;
-         background:#3b82f6;color:#fff;cursor:pointer}
+    h1{margin-bottom:20px}
+    .card{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:14px;margin:12px auto;max-width:420px}
+    .word{background:#333;padding:8px;border-radius:8px;margin:6px 0;font-weight:700}
+    .btn{display:block;margin:12px auto;padding:14px;font-size:18px;border:none;border-radius:10px;max-width:300px;width:90%;background:#3b82f6;color:#fff;cursor:pointer}
     .btn:hover{background:#2563eb}
   </style>
 </head>
 <body>
-  <h1 id="title">Pilih Peran</h1>
+  <h1 id="title">Team</h1>
+
+  <div id="wordBox" class="card">Loading kata…</div>
+
   <button class="btn" id="codeBtn">Generator Code</button>
   <button class="btn" id="ansBtn">Answer Input</button>
 
-  <script>
+  <script type="module">
+    import { get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { db } from "./firebase.js";
+    import { teamRef, mountWinnerBanner } from "./game-utils.js";
+
     const params = new URLSearchParams(window.location.search);
     const gameId = params.get("gameId");
     const team = params.get("team");
-
     document.getElementById("title").textContent = `Team ${team}`;
+    mountWinnerBanner(gameId);
 
-    document.getElementById("codeBtn").addEventListener("click", () => {
+    // tampilkan 4 kata unik
+    const snap = await get(teamRef(gameId, team));
+    const box = document.getElementById("wordBox");
+    if (snap.exists()) {
+      const { words = [] } = snap.val() || {};
+      box.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+    } else {
+      box.textContent = "Kata tidak ditemukan.";
+    }
+
+    // tombol redirect
+    document.getElementById("codeBtn").onclick = () => {
       window.location.href = `codes.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
-    });
-    document.getElementById("ansBtn").addEventListener("click", () => {
+    };
+    document.getElementById("ansBtn").onclick = () => {
       window.location.href = `answers.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
-    });
+    };
   </script>
 </body>
 </html>
