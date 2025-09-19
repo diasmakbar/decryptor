@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Decryptor - Setup</title>
+  <style>
+    body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
+    h1{margin-bottom:20px}
+    input,button{padding:12px;font-size:16px;border-radius:8px;margin:6px 0;width:90%;max-width:320px;border:1px solid #444}
+    button{background:#3b82f6;color:#fff;border:none;cursor:pointer}
+    button:hover{background:#2563eb}
+  </style>
+</head>
+<body>
+  <h1>🔑 Masuk Game</h1>
+  <input id="gameId" placeholder="Game ID (4 digit)"/>
+  <br/>
+  <input id="teamName" placeholder="Nama Tim"/>
+  <br/>
+  <button id="joinBtn">Join</button>
+
+  <script type="module">
+    import { ref, get, set, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { db } from "./firebase.js";
+
+    document.getElementById("joinBtn").addEventListener("click", start);
+
+    async function start() {
+      const gameId = document.getElementById("gameId").value.trim();
+      const team = document.getElementById("teamName").value.trim();
+      if (!/^\d{4}$/.test(gameId)) return alert("Game ID harus 4 digit angka!");
+      if (!team) return alert("Isi nama tim!");
+
+      const gameRef = ref(db, `games/${gameId}`);
+      const snap = await get(gameRef);
+
+      if (!snap.exists()) {
+        // buat game baru
+        await set(gameRef, {
+          currentRound: 1,
+          winner: null,
+          teamOrder: [team],
+          teams: { [team]: { words: [], ready: false, score: 0 } },
+          rounds: {}
+        });
+      } else {
+        const game = snap.val();
+        if (game.teams && !game.teams[team]) {
+          // tambah tim baru
+          const newOrder = Array.isArray(game.teamOrder) ? [...game.teamOrder, team] : [team];
+          await update(ref(db), {
+            [`games/${gameId}/teams/${team}`]: { words: [], ready: false, score: 0 },
+            [`games/${gameId}/teamOrder`]: newOrder
+          });
+        }
+      }
+
+      // redirect ke selection page
+      window.location.href = `menu.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+    }
+  </script>
+</body>
+</html>

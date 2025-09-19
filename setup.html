@@ -1,80 +1,88 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Setup Game</title>
+  <style>
+    body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
+    input,button{padding:12px;font-size:16px;border-radius:8px;border:1px solid #444;margin:6px 0;width:min(420px,90vw)}
+    button{background:#3b82f6;color:#fff;border:none}
+  </style>
+</head>
 <body>
   <h1>Setup Game</h1>
   <input id="gameId" placeholder="Game ID (4 digit)"/>
   <br/>
   <input id="teamName" placeholder="Nama Tim (unik)"/>
   <br/>
-  <button onclick="start()">Join Game</button>
+  <button id="startBtn">Join</button>
 
   <script type="module">
-    import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { ref, get, set, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
+
+    document.getElementById("startBtn").addEventListener("click", start);
+    window.start = start; // (optional) kalau mau onclick di atribut
 
     async function start() {
       const gameId = document.getElementById("gameId").value.trim();
       const team = document.getElementById("teamName").value.trim();
+      if (!/^\d{4}$/.test(gameId)) return alert("Game ID harus 4 digit angka!");
+      if (!team) return alert("Isi nama tim!");
 
-      if (!/^\d{4}$/.test(gameId)) {
-        alert("Game ID harus 4 digit angka!");
-        return;
-      }
-      if (!team) {
-        alert("Isi nama tim!");
-        return;
-      }
-
-      // ambil game data
+      // Load game
       const gameSnap = await get(ref(db, `games/${gameId}`));
-      let allWords = (await fetch("words.txt").then(r=>r.text()))
-        .split("\n").map(w=>w.trim()).filter(Boolean);
 
-      // kalau game belum ada → buat game baru
+      // Ambil semua kata
+      const text = await fetch("words.txt").then(r=>r.text());
+      const allWords = text.split("\n").map(w=>w.trim()).filter(Boolean);
+
+      // Game baru
       if (!gameSnap.exists()) {
-        // generate words untuk tim pertama
-        const selected = allWords.sort(()=>Math.random()-0.5).slice(0,4);
-
+        const selected = shuffle(allWords).slice(0,4);
         await set(ref(db, `games/${gameId}`), {
+          currentRound: 1,
+          winner: null,
+          teamOrder: [team],
           teams: {
-            [team]: { words: selected }
+            [team]: { words: selected, ready: false, score: 0 }
           },
           rounds: {}
         });
-
-        console.log("✅ Game baru dibuat, kata untuk", team, ":", selected);
-        window.location.href = `words.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
-        return;
+        return goWords(gameId, team);
       }
 
-      // game sudah ada → validasi nama tim
-      const gameData = gameSnap.val();
-      if (gameData.teams && gameData.teams[team]) {
-        alert("❌ Nama tim sudah dipakai, pilih nama lain!");
-        return;
+      // Game ada → validasi nama tim unik
+      const game = gameSnap.val() || {};
+      if (game.teams && game.teams[team]) {
+        return alert("Nama tim sudah dipakai. Pilih nama lain!");
       }
 
-      // ambil kata yang sudah dipakai tim lain
-      let used = [];
-      Object.values(gameData.teams || {}).forEach(t => {
-        used = used.concat(t.words || []);
-      });
+      // Hitung kata tersisa
+      const used = Object.values(game.teams || {}).flatMap(t => t.words || []);
       const remaining = allWords.filter(w => !used.includes(w));
+      if (remaining.length < 4) return alert("Kata tersisa tidak cukup untuk tim baru.");
 
-      if (remaining.length < 4) {
-        alert("⚠️ Kata tidak cukup untuk tim baru!");
-        return;
-      }
+      const selected = shuffle(remaining).slice(0,4);
 
-      const selected = remaining.sort(()=>Math.random()-0.5).slice(0,4);
+      // Tambah tim + urutan tim
+      const newOrder = Array.isArray(game.teamOrder) ? [...game.teamOrder] : [];
+      newOrder.push(team);
 
-      // simpan kata untuk tim baru
-      await set(ref(db, `games/${gameId}/teams/${team}`), {
-        words: selected
+      await update(ref(db), {
+        [`games/${gameId}/teams/${team}`]: { words: selected, ready: false, score: 0 },
+        [`games/${gameId}/teamOrder`]: newOrder
       });
 
-      console.log("✅ Tim baru join:", team, "dengan kata:", selected);
+      return goWords(gameId, team);
+    }
+
+    function goWords(gameId, team) {
       window.location.href = `words.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
     }
 
-    window.start = start;
+    function shuffle(a){ const x=[...a]; for(let i=x.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]} return x;}
   </script>
 </body>
+</html>

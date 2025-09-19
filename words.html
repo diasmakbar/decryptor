@@ -1,25 +1,40 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Kata Tim</title>
+  <style>
+    body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
+    .card{background:#222;border:1px solid #333;border-radius:12px;padding:14px;margin:10px auto;max-width:520px}
+    .word{background:#333;border-radius:10px;padding:10px;margin:8px 0;font-weight:700}
+  </style>
+</head>
 <body>
-  <h1 id="teamTitle"></h1>
-  <div id="wordBox"></div>
+  <h1 id="title"></h1>
+  <div id="box" class="card">Memuat kata…</div>
 
   <script type="module">
-    import { ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
+    import { teamRef, gameRef, mountWinnerBanner } from "./game-utils.js";
 
     const params = new URLSearchParams(window.location.search);
     const gameId = params.get("gameId");
     const team = params.get("team");
+    document.getElementById("title").textContent = `Team ${team}`;
 
-    document.getElementById("teamTitle").textContent = "Team " + team;
+    // Winner banner
+    mountWinnerBanner(gameId);
 
-    async function loadWords() {
-      const snap = await get(ref(db, `games/${gameId}/teams/${team}/words`));
-      if (snap.exists()) {
-        const words = snap.val();
-        document.getElementById("wordBox").innerHTML =
-          words.map((w,i)=>`<div>${i+1}. ${w}</div>`).join("");
-      }
+    const snap = await get(teamRef(gameId, team));
+    const box = document.getElementById("box");
+    if (snap.exists()) {
+      const { words = [] } = snap.val() || {};
+      box.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+    } else {
+      box.textContent = "Kata tidak ditemukan.";
     }
-    loadWords();
   </script>
 </body>
+</html>

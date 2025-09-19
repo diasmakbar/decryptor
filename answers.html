@@ -1,93 +1,111 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Answers</title>
+  <style>
+    body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:20px}
+    h1{text-align:center}
+    form{max-width:600px;margin:0 auto}
+    .row{display:grid;grid-template-columns:1fr 120px;gap:8px;margin:8px 0}
+    input,button{padding:10px;font-size:16px;border-radius:8px;border:1px solid #333}
+    button{background:#3b82f6;color:#fff;border:none;margin-top:8px}
+    .card{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:12px;margin:14px 0}
+    .code{font-weight:800;letter-spacing:.2em}
+  </style>
+</head>
 <body>
-  <h1 id="roundTitle"></h1>
+  <h1 id="title">Answers</h1>
+
   <form id="answerForm">
-    <div>
-      <input placeholder="Clue 1" name="clue1"/>
-      <input placeholder="Tebakan Angka" name="guess1" type="number" min="1" max="4"/>
-      <input placeholder="Jawaban Asli" id="ans1" readonly/>
+    <div class="row">
+      <input name="clue1" placeholder="Clue 1"/>
+      <input name="guess1" type="number" min="1" max="4" placeholder="Angka 1–4"/>
     </div>
-    <div>
-      <input placeholder="Clue 2" name="clue2"/>
-      <input placeholder="Tebakan Angka" name="guess2" type="number" min="1" max="4"/>
-      <input placeholder="Jawaban Asli" id="ans2" readonly/>
+    <div class="row">
+      <input name="clue2" placeholder="Clue 2"/>
+      <input name="guess2" type="number" min="1" max="4" placeholder="Angka 1–4"/>
     </div>
-    <div>
-      <input placeholder="Clue 3" name="clue3"/>
-      <input placeholder="Tebakan Angka" name="guess3" type="number" min="1" max="4"/>
-      <input placeholder="Jawaban Asli" id="ans3" readonly/>
+    <div class="row">
+      <input name="clue3" placeholder="Clue 3"/>
+      <input name="guess3" type="number" min="1" max="4" placeholder="Angka 1–4"/>
     </div>
     <button type="submit">Submit</button>
   </form>
 
-  <h2>History</h2>
-  <div id="historyBox"></div>
+  <div id="history" class="card">
+    <div><b>History</b></div>
+    <div id="historyBody">Memuat…</div>
+  </div>
 
   <script type="module">
     import { ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
+    import {
+      gameRef, roundsRef, currentRoundRef, teamOrderRef,
+      getHostTeam, getOtherTeam, mountWinnerBanner
+    } from "./game-utils.js";
+    import { maybeScoreCurrentRound } from "./scoring.js";
 
     const params = new URLSearchParams(window.location.search);
-    const gameId = params.get("gameId") || "test";
-    const team = params.get("team") || "Unknown";
+    const gameId = params.get("gameId");
+    const team = params.get("team");
 
-    let round = 1;
-    document.getElementById("roundTitle").textContent = `Team ${team} - Round ${round}`;
+    document.getElementById("title").textContent = `Team ${team}`;
+    mountWinnerBanner(gameId);
 
-    // 🔹 listen kode resmi dari generator
-    onValue(ref(db, `games/${gameId}/rounds/${round}/code`), snap => {
-      if (snap.exists()) {
-        const code = snap.val();
-        document.getElementById("ans1").value = code[0];
-        document.getElementById("ans2").value = code[1];
-        document.getElementById("ans3").value = code[2];
-      }
+    let currentRound = 1;
+
+    // Listen round global
+    onValue(currentRoundRef(gameId), (snap) => {
+      if (snap.exists()) currentRound = snap.val();
     });
 
-    // 🔹 submit clue & guesses
-    document.getElementById("answerForm").addEventListener("submit", async e => {
+    // Submit clues & guesses
+    document.getElementById("answerForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const data = new FormData(e.target);
-      const clues = [data.get("clue1"), data.get("clue2"), data.get("clue3")];
-      const guesses = [data.get("guess1"), data.get("guess2"), data.get("guess3")];
+      const fd = new FormData(e.target);
+      const clues   = [fd.get("clue1"), fd.get("clue2"), fd.get("clue3")].map(x => (x||"").trim());
+      const guesses = [fd.get("guess1"), fd.get("guess2"), fd.get("guess3")];
 
-      // validasi angka
-      if (!guesses.every(g => g && /^[1-4]$/.test(g))) {
-        alert("Tebakan harus angka 1–4!");
-        return;
-      }
+      if (clues.some(c => !c)) return alert("Isi semua CLUE (3 baris)!");
+      if (guesses.some(g => !g)) return alert("Isi semua ANGKA (3 baris)!");
+      if (!guesses.every(g => /^[1-4]$/.test(String(g)))) return alert("Semua angka harus 1–4!");
 
-      await set(ref(db, `games/${gameId}/rounds/${round}/clues/${team}`), clues);
-      await set(ref(db, `games/${gameId}/rounds/${round}/guesses/${team}`), guesses);
+      await set(ref(db, `games/${gameId}/rounds/${currentRound}/clues/${team}`), clues);
+      await set(ref(db, `games/${gameId}/rounds/${currentRound}/guesses/${team}`), guesses);
 
-      round++;
-      document.getElementById("roundTitle").textContent = `Team ${team} - Round ${round}`;
       e.target.reset();
+
+      // setelah submit, coba scoring (idempotent & otomatis hanya jika sudah lengkap)
+      maybeScoreCurrentRound(gameId);
     });
 
-    // 🔹 render history realtime (dipisah per tim)
-    onValue(ref(db, `games/${gameId}`), snap => {
+    // Render history (dipisah per tim)
+    onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
-      const game = snap.val();
+      const game = snap.val() || {};
       const rounds = game.rounds || {};
       const teams = Object.keys(game.teams || {});
+      const body = document.getElementById("historyBody");
+      if (!teams.length) { body.textContent = "Belum ada tim."; return; }
 
-      const div = document.getElementById("historyBox");
-      div.innerHTML = "";
+      body.innerHTML = "";
 
-      Object.entries(rounds).forEach(([num,data]) => {
-        let html = `<div style="margin-bottom:20px; text-align:left;">
-                      <b>Round ${num}</b><br/>
-                      <u>Code:</u> ${data.code ? data.code.join(" - ") : "-"}<br/><br/>`;
-
+      Object.keys(rounds).sort((a,b)=>Number(a)-Number(b)).forEach((num) => {
+        const r = rounds[num];
+        const code = Array.isArray(r.code) ? r.code.join(" - ") : "-";
+        let html = `<div class="card"><div><b>Round ${num}</b></div><div class="code">Code: ${code}</div><br/>`;
         teams.forEach(t => {
-          html += `<b>${t}</b><br/>
-                   Clues: ${data.clues?.[t] ? data.clues[t].join(" | ") : "-"}<br/>
-                   Guesses: ${data.guesses?.[t] ? data.guesses[t].join(" - ") : "-"}<br/><br/>`;
+          const clues   = r.clues?.[t]   ? r.clues[t].join(" | ")   : "-";
+          const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
+          html += `<div><b>${t}</b><br/>Clues: ${clues}<br/>Guesses: ${guesses}</div><br/>`;
         });
-
-        html += `</div><hr/>`;
-        div.innerHTML += html;
+        html += `</div>`;
+        body.innerHTML += html;
       });
     });
   </script>
 </body>
+</html>
