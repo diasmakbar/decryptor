@@ -21,7 +21,7 @@
   <button id="joinBtn">Join</button>
 
   <script type="module">
-    import { ref, get, set, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { ref, get, set, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
 
     document.getElementById("joinBtn").addEventListener("click", start);
@@ -40,11 +40,10 @@
       const text = await fetch("words.txt").then(r=>r.text());
       const allWords = text.split("\n").map(w=>w.trim()).filter(Boolean);
 
-      // helper
       const shuffle = a => { const x=[...a]; for(let i=x.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]} return x; };
 
+      // case 1: game belum ada → buat baru
       if (!snap.exists()) {
-        // game baru → tim pertama otomatis generator
         const selected = shuffle(allWords).slice(0,4);
         await set(gameRef, {
           currentRound: 1,
@@ -53,15 +52,35 @@
           teams: { [team]: { words: selected, ready: false, score: 0, hasGenerator: true } },
           rounds: {}
         });
-        window.location.href = `codes.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+        return go("codes.html", gameId, team);
+      }
+
+      const game = snap.val() || {};
+
+      // case 2: game sudah selesai → reset & buat baru
+      if (game.winner) {
+        await remove(gameRef);
+        const selected = shuffle(allWords).slice(0,4);
+        await set(gameRef, {
+          currentRound: 1,
+          winner: null,
+          teamOrder: [team],
+          teams: { [team]: { words: selected, ready: false, score: 0, hasGenerator: true } },
+          rounds: {}
+        });
+        return go("codes.html", gameId, team);
+      }
+
+      // case 3: game sedang berlangsung (round >= 2) → tolak
+      if ((game.currentRound || 1) >= 2) {
+        alert("Game sedang berlangsung!");
         return;
       }
 
-      // game sudah ada
-      const game = snap.val() || {};
+      // case 4: round masih 1 → boleh tim baru join
       const teams = game.teams || {};
-      // kalau tim belum ada → buat dan jadikan player pertama sebagai generator
       if (!teams[team]) {
+        // buat tim baru
         const used = Object.values(teams).flatMap(t => t.words || []);
         const remaining = allWords.filter(w => !used.includes(w));
         if (remaining.length < 4) return alert("Kata tersisa tidak cukup.");
@@ -71,17 +90,20 @@
           [`${gamePath}/teams/${team}`]: { words: selected, ready: false, score: 0, hasGenerator: true },
           [`${gamePath}/teamOrder`]: newOrder
         });
-        window.location.href = `codes.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
-        return;
+        return go("codes.html", gameId, team);
       }
 
-      // tim sudah ada → kalau belum punya generator, jadi generator; kalau sudah, jadi answers
+      // case 5: tim sudah ada → join role
       if (!teams[team].hasGenerator) {
         await update(ref(db), { [`${gamePath}/teams/${team}/hasGenerator`]: true });
-        window.location.href = `codes.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+        return go("codes.html", gameId, team);
       } else {
-        window.location.href = `answers.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+        return go("answers.html", gameId, team);
       }
+    }
+
+    function go(page, gameId, team) {
+      window.location.href = `${page}?gameId=${gameId}&team=${encodeURIComponent(team)}`;
     }
   </script>
 </body>
