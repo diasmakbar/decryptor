@@ -1,24 +1,75 @@
 <body>
   <h1 id="roundTitle"></h1>
   <button id="genBtn">Generate Code</button>
+  <button id="nextBtn">Next Round</button>
   <div id="codeBox">— — —</div>
+  <div id="status"></div>
 
   <script type="module">
-    import { ref, set } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { ref, set, onValue, get, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
 
     const params = new URLSearchParams(window.location.search);
     const gameId = params.get("gameId") || "test";
-    let round = 1;
+    const team = params.get("team") || "Unknown";
 
-    document.getElementById("roundTitle").textContent = "Round " + round;
+    const roundRef = ref(db, `games/${gameId}/currentRound`);
+    const teamsRef = ref(db, `games/${gameId}/teams`);
 
-    document.getElementById("genBtn").addEventListener("click", () => {
-      const code = Array.from({length:3},()=>Math.floor(Math.random()*4)+1);
-      set(ref(db, `games/${gameId}/rounds/${round}/code`), code);
+    // ambil round awal
+    let currentRound = 1;
+    onValue(roundRef, snap => {
+      if (snap.exists()) {
+        currentRound = snap.val();
+        document.getElementById("roundTitle").textContent = "Round " + currentRound;
+      }
+    });
+
+    // fungsi buat 3 angka unik
+    function generateUniqueCode() {
+      const pool = [1, 2, 3, 4];
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      return pool.slice(0, 3);
+    }
+
+    // tombol generate code
+    document.getElementById("genBtn").addEventListener("click", async () => {
+      const code = generateUniqueCode();
+      await set(ref(db, `games/${gameId}/rounds/${currentRound}/code`), code);
       document.getElementById("codeBox").textContent = code.join(" - ");
-      round++;
-      document.getElementById("roundTitle").textContent = "Round " + round;
+    });
+
+    // tombol next round (set ready true untuk tim ini)
+    document.getElementById("nextBtn").addEventListener("click", async () => {
+      await update(ref(db, `games/${gameId}/teams/${team}`), { ready: true });
+    });
+
+    // listen state semua tim
+    onValue(teamsRef, snap => {
+      if (!snap.exists()) return;
+      const teams = snap.val();
+
+      const allReady = Object.values(teams).every(t => t.ready === true);
+
+      if (allReady) {
+        // semua tim sudah siap → naik round
+        update(ref(db, `games/${gameId}`), { currentRound: currentRound + 1 });
+
+        // reset ready semua tim
+        Object.keys(teams).forEach(t => {
+          update(ref(db, `games/${gameId}/teams/${t}`), { ready: false });
+        });
+
+        document.getElementById("status").textContent = "✅ Semua tim siap, pindah ke Round berikut!";
+      } else {
+        const readyList = Object.entries(teams).map(([name,t]) =>
+          `${name}: ${t.ready ? "✅" : "⌛"}`
+        ).join(" | ");
+        document.getElementById("status").textContent = "Waiting... " + readyList;
+      }
     });
   </script>
 </body>

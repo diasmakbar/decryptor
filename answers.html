@@ -3,17 +3,17 @@
   <form id="answerForm">
     <div>
       <input placeholder="Clue 1" name="clue1"/>
-      <input placeholder="Tebakan Angka" name="guess1" type="number"/>
+      <input placeholder="Tebakan Angka" name="guess1" type="number" min="1" max="4"/>
       <input placeholder="Jawaban Asli" id="ans1" readonly/>
     </div>
     <div>
       <input placeholder="Clue 2" name="clue2"/>
-      <input placeholder="Tebakan Angka" name="guess2" type="number"/>
+      <input placeholder="Tebakan Angka" name="guess2" type="number" min="1" max="4"/>
       <input placeholder="Jawaban Asli" id="ans2" readonly/>
     </div>
     <div>
       <input placeholder="Clue 3" name="clue3"/>
-      <input placeholder="Tebakan Angka" name="guess3" type="number"/>
+      <input placeholder="Tebakan Angka" name="guess3" type="number" min="1" max="4"/>
       <input placeholder="Jawaban Asli" id="ans3" readonly/>
     </div>
     <button type="submit">Submit</button>
@@ -23,7 +23,7 @@
   <div id="historyBox"></div>
 
   <script type="module">
-    import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
 
     const params = new URLSearchParams(window.location.search);
@@ -64,29 +64,30 @@
       e.target.reset();
     });
 
-    // 🔹 render history realtime
-    onValue(ref(db, `games/${gameId}/rounds`), snap => {
-      if (snap.exists()) {
-        const rounds = snap.val();
-        const div = document.getElementById("historyBox");
-        div.innerHTML = "";
+    // 🔹 render history realtime (dipisah per tim)
+    onValue(ref(db, `games/${gameId}`), snap => {
+      if (!snap.exists()) return;
+      const game = snap.val();
+      const rounds = game.rounds || {};
+      const teams = Object.keys(game.teams || {});
 
-        Object.entries(rounds).forEach(([num,data]) => {
-          div.innerHTML += `
-            <div style="margin-bottom:15px; text-align:left;">
-              <b>Round ${num}</b><br/>
-              <u>Code:</u> ${data.code ? data.code.join(" - ") : "-"}<br/><br/>
+      const div = document.getElementById("historyBox");
+      div.innerHTML = "";
 
-              <b>Team A</b><br/>
-              Clues: ${data.clues?.TeamA ? data.clues.TeamA.join(" | ") : "-"}<br/>
-              Guesses: ${data.guesses?.TeamA ? data.guesses.TeamA.join(" - ") : "-"}<br/><br/>
+      Object.entries(rounds).forEach(([num,data]) => {
+        let html = `<div style="margin-bottom:20px; text-align:left;">
+                      <b>Round ${num}</b><br/>
+                      <u>Code:</u> ${data.code ? data.code.join(" - ") : "-"}<br/><br/>`;
 
-              <b>Team B</b><br/>
-              Clues: ${data.clues?.TeamB ? data.clues.TeamB.join(" | ") : "-"}<br/>
-              Guesses: ${data.guesses?.TeamB ? data.guesses.TeamB.join(" - ") : "-"}<br/>
-            </div><hr/>`;
+        teams.forEach(t => {
+          html += `<b>${t}</b><br/>
+                   Clues: ${data.clues?.[t] ? data.clues[t].join(" | ") : "-"}<br/>
+                   Guesses: ${data.guesses?.[t] ? data.guesses[t].join(" - ") : "-"}<br/><br/>`;
         });
-      }
+
+        html += `</div><hr/>`;
+        div.innerHTML += html;
+      });
     });
   </script>
 </body>
