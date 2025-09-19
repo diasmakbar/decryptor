@@ -3,27 +3,7 @@
   <div id="wordBox"></div>
 
   <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
-
-  const firebaseConfig = {
-      apiKey: "AIzaSyCbZ5Ca6sMcCdYTE5A1hCq6Vr3NJvPotAQ",
-      authDomain: "decryptor-game.firebaseapp.com",
-      databaseURL: "https://console.firebase.google.com/u/0/project/decryptor-game/database/decryptor-game-default-rtdb/data/~2F",
-      projectId: "decryptor-game",
-      storageBucket: "decryptor-game.firebasestorage.app",
-      messagingSenderId: "285400526933",
-      appId: "1:285400526933:web:8c8f9f4fc39c97c8c8a4dc",
-      measurementId: "G-ZRDVJX3P31"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-  </script>
-
-
-  <script type="module">
-    import { ref, get } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+    import { ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
 
     const params = new URLSearchParams(window.location.search);
@@ -36,7 +16,8 @@
       const snap = await get(ref(db, `games/${gameId}/words`));
       if (snap.exists()) {
         const words = snap.val();
-        document.getElementById("wordBox").innerHTML = words.map((w,i)=>`<div>${i+1}. ${w}</div>`).join("");
+        document.getElementById("wordBox").innerHTML =
+          words.map((w,i)=>`<div>${i+1}. ${w}</div>`).join("");
       }
     }
     loadWords();
