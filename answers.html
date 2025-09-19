@@ -7,74 +7,57 @@
   <style>
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
     h1{margin:10px 0}
-    .wordGrid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .word {
-      background:#2563eb;
-      color:#fff;
-      font-weight:800;
-      font-size:18px;
-      padding:14px;
-      border-radius:10px;
-      text-align:center;
-    }
-    .word small {
-      display:block;
-      font-weight:400;
-      font-size:14px;
-      opacity:0.8;
-      margin-top:4px;
-    }
-    @media (max-width:600px) {
-      .wordGrid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
+    .wordGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:800px;margin:0 auto}
+    .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:14px;border-radius:10px;text-align:center}
+    .word small{display:block;font-weight:400;font-size:14px;opacity:.8;margin-top:4px}
+    @media (max-width:600px){.wordGrid{grid-template-columns:repeat(2,1fr)}}
     .inputs{margin:16px auto;max-width:600px}
-    .inputs input{margin:6px;padding:10px;border-radius:8px;border:1px solid #444;width:120px;text-align:center}
+    .inputs input{margin:6px;padding:10px;border-radius:8px;border:1px solid #444;width:140px;text-align:center}
     button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
     #submitBtn{background:#22c55e;color:#111}
     .status{opacity:.9;margin-top:12px}
-    .history{background:#222;padding:10px;border-radius:10px;margin:14px auto;max-width:720px;text-align:left}
-    .scoreBoard{background:#222;padding:10px;border-radius:10px;max-width:520px;margin:10px auto}
+    .scoreBoard{background:#222;padding:10px;border-radius:10px;max-width:520px;margin:14px auto}
+    .history{max-width:900px;margin:18px auto;text-align:left}
+    .roundCard{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:16px;margin:18px 0}
+    .roundHeader{font-weight:700;margin-bottom:12px;text-align:center}
+    .teamRow{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    .teamBox{background:#111;padding:12px;border-radius:8px}
+    .teamBox b{display:block;margin-bottom:6px}
+    @media (max-width:700px){.teamRow{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <h1 id="hdr">Round</h1>
 
-  <div id="wordBox" class="card">Loading kata…</div>
+  <div id="wordBox" class="wordGrid" aria-live="polite"></div>
 
   <div class="inputs">
     <div>
       <input type="text" id="clue1" placeholder="Clue 1"/>
-      <input type="number" id="num1" placeholder="#"/>
+      <input type="number" id="num1" min="1" max="4" placeholder="#"/>
     </div>
     <div>
       <input type="text" id="clue2" placeholder="Clue 2"/>
-      <input type="number" id="num2" placeholder="#"/>
+      <input type="number" id="num2" min="1" max="4" placeholder="#"/>
     </div>
     <div>
       <input type="text" id="clue3" placeholder="Clue 3"/>
-      <input type="number" id="num3" placeholder="#"/>
+      <input type="number" id="num3" min="1" max="4" placeholder="#"/>
     </div>
   </div>
 
   <button id="submitBtn">Submit</button>
   <div id="answerStatus" class="status"></div>
 
-  <div id="history" class="history">History:</div>
   <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
+
+  <div id="history" class="history"></div>
 
   <script type="module">
     import { ref, onValue, update, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
-      currentRoundRef, teamRef, roundRef, gameRef
+      currentRoundRef, teamRef, roundRef, gameRef, teamOrderRef, getHostTeam
     } from "./game-utils.js";
     import { maybeScoreCurrentRound } from "./scoring.js";
 
@@ -90,36 +73,85 @@
     const scoreBox = document.getElementById("scoreBox");
 
     let currentRound = 1;
+    let roundUnsub = null;
+    let teamOrder = [];
 
-    // tampilkan kata tim sendiri
-    const wSnap = await get(teamRef(gameId, team));
-    if (wSnap.exists()) {
-      const { words = [] } = wSnap.val() || {};
-      wordBox.innerHTML = `<div class="wordGrid">` +
-        words.map((w,i)=>`<div class="word">${w}<small>${i+1}</small></div>`).join("") +
-        `</div>`;
-    } else {
-      wordBox.textContent = "Kata tim tidak ditemukan.";
-    }
+    // render kata tim (4 kotak biru)
+    (async () => {
+      const wSnap = await get(teamRef(gameId, team));
+      if (wSnap.exists()) {
+        const { words = [] } = wSnap.val() || {};
+        wordBox.innerHTML = words
+          .map((w,i)=>`<div class="word">${w}<small>${i+1}</small></div>`)
+          .join("");
+      } else {
+        wordBox.innerHTML = `<div style="grid-column:1/-1;text-align:center;opacity:.8">Kata tim tidak ditemukan.</div>`;
+      }
+    })();
 
-    // scoreboard live
+    // scoreboard + full history (only revealed rounds)
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const game = snap.val();
       const teams = Object.keys(game.teams || {});
       const scores = game.teams || {};
+
+      // scoreboard
       scoreBox.textContent = `Scoreboard → ${teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ")}`;
+
+      // history across rounds — ONLY revealed
+      const rounds = game.rounds || {};
+      const orderSnap = game.teamOrder || [];
+      teamOrder = orderSnap;
+
+      historyDiv.innerHTML = "";
+      Object.keys(rounds).map(n=>Number(n)).sort((a,b)=>a-b).forEach(num => {
+        const r = rounds[num];
+        if (r?.revealed !== true) return; // ⛔️ tampilkan hanya setelah revealed
+
+        const host = getHostTeam(teamOrder, num);
+        const codeTxt = Array.isArray(r.code) ? r.code.join(" - ") : "-";
+        let html = `<div class="roundCard">
+                      <div class="roundHeader">Round ${num} - Giliran Team ${host} speak up!</div>
+                      <div class="teamRow">`;
+        teams.forEach(t => {
+          const clues   = r.clues?.[t]   ? r.clues[t].join(" | ")   : "-";
+          const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
+          const answers = r.guesses?.[t] ? codeTxt : "-";
+          html += `<div class="teamBox">
+                     <b>${t}</b>
+                     Clues: ${clues}<br/>
+                     Guesses: ${guesses}<br/>
+                     Answers: ${answers}
+                   </div>`;
+        });
+        html += `</div></div>`;
+        historyDiv.innerHTML += html;
+      });
     });
 
-    // listen round
+    // watch currentRound → reset UI and bind per-round watcher
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       currentRound = snap.val();
       hdr.textContent = `Round ${currentRound}`;
-      resetForm();
+      resetFormUI();
+      bindThisRoundWatcher(currentRound);
     });
 
-    // tombol submit
+    // per-round watcher: lock submit if this team already submitted
+    function bindThisRoundWatcher(round) {
+      if (roundUnsub) roundUnsub();
+      roundUnsub = onValue(roundRef(gameId, round), (snap) => {
+        if (!snap.exists()) { resetFormUI(); return; }
+        const r = snap.val() || {};
+        const already = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3;
+        submitBtn.disabled = !!already;
+        answerStatus.textContent = already ? "✅ Jawaban terkirim, tunggu tim lain..." : "";
+      });
+    }
+
+    // submit
     submitBtn.addEventListener("click", async () => {
       const c1 = document.getElementById("clue1").value.trim();
       const c2 = document.getElementById("clue2").value.trim();
@@ -128,55 +160,25 @@
       const n2 = document.getElementById("num2").value.trim();
       const n3 = document.getElementById("num3").value.trim();
 
-      if (!c1 || !c2 || !c3 || !n1 || !n2 || !n3) {
-        alert("Isi 3 clue dan 3 angka!");
-        return;
-      }
-
-      const guesses = [parseInt(n1), parseInt(n2), parseInt(n3)];
-      if (guesses.some(isNaN)) {
-        alert("Semua nomor harus angka!");
-        return;
-      }
+      if (!c1 || !c2 || !c3 || !n1 || !n2 || !n3) { alert("Isi 3 clue dan 3 angka!"); return; }
+      const guesses = [Number(n1), Number(n2), Number(n3)];
+      if (!guesses.every(g => Number.isInteger(g) && g>=1 && g<=4)) { alert("Semua angka harus 1–4!"); return; }
 
       await update(roundRef(gameId, currentRound), {
-        [`guesses/${team}`]: guesses,
-        [`clues/${team}`]: [c1,c2,c3]
+        [`clues/${team}`]: [c1, c2, c3],
+        [`guesses/${team}`]: guesses
       });
 
       submitBtn.disabled = true;
       answerStatus.textContent = "✅ Jawaban terkirim, tunggu tim lain...";
+      // kalau kedua tim sudah submit, scoring.js akan set revealed=true + update skor
       maybeScoreCurrentRound(gameId);
     });
 
-    // listen history (tunggu semua tim submit)
-    onValue(roundRef(gameId, currentRound), (snap) => {
-      if (!snap.exists()) return;
-      const roundData = snap.val();
-      const guesses = roundData.guesses || {};
-      const clues = roundData.clues || {};
-      const code = roundData.code;
-
-      // semua tim sudah submit
-      const teams = Object.keys(guesses);
-      if (teams.length === 0 || !code) return;
-
-      // render sekali per round
-      historyDiv.innerHTML = `<h3>History</h3>`;
-      teams.forEach(t => {
-        historyDiv.innerHTML += `
-          <div style="margin:8px 0;padding:8px;border-bottom:1px solid #444;text-align:left">
-            <b>Team ${t}</b><br/>
-            Clues: ${clues[t] ? clues[t].join(" | ") : ""}<br/>
-            Guesses: ${guesses[t] ? guesses[t].join(" - ") : ""}<br/>
-            Answers: ${code.join(" - ")}
-          </div>`;
-      });
-    });
-
-    function resetForm() {
+    function resetFormUI() {
       ["clue1","clue2","clue3","num1","num2","num3"].forEach(id => {
-        document.getElementById(id).value = "";
+        const el = document.getElementById(id);
+        if (el) el.value = "";
       });
       submitBtn.disabled = false;
       answerStatus.textContent = "";
