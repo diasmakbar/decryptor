@@ -13,7 +13,7 @@
     document.getElementById("teamTitle").textContent = "Team " + team;
 
     async function loadWords() {
-      const snap = await get(ref(db, `games/${gameId}/words`));
+      const snap = await get(ref(db, `games/${gameId}/teams/${team}/words`));
       if (snap.exists()) {
         const words = snap.val();
         document.getElementById("wordBox").innerHTML =

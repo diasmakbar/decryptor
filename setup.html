@@ -2,12 +2,12 @@
   <h1>Setup Game</h1>
   <input id="gameId" placeholder="Game ID (4 digit)"/>
   <br/>
-  <input id="teamName" placeholder="Nama Tim"/>
+  <input id="teamName" placeholder="Nama Tim (unik)"/>
   <br/>
-  <button onclick="start()">Mulai Game</button>
+  <button onclick="start()">Join Game</button>
 
   <script type="module">
-    import { ref, set, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { ref, set, get, child } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
 
     async function start() {
@@ -23,25 +23,55 @@
         return;
       }
 
-      // cek apakah gameId sudah ada
-      const snap = await get(ref(db, `games/${gameId}/words`));
+      // ambil game data
+      const gameSnap = await get(ref(db, `games/${gameId}`));
+      let allWords = (await fetch("words.txt").then(r=>r.text()))
+        .split("\n").map(w=>w.trim()).filter(Boolean);
 
-      // kalau belum ada, host generate words
-      if (!snap.exists()) {
-        const text = await fetch("words.txt").then(r=>r.text());
-        const all = text.split("\n").map(w=>w.trim()).filter(Boolean);
-        const selected = all.sort(()=>Math.random()-0.5).slice(0,4);
+      // kalau game belum ada → buat game baru
+      if (!gameSnap.exists()) {
+        // generate words untuk tim pertama
+        const selected = allWords.sort(()=>Math.random()-0.5).slice(0,4);
 
         await set(ref(db, `games/${gameId}`), {
-          words: selected,
+          teams: {
+            [team]: { words: selected }
+          },
           rounds: {}
         });
-        console.log("Game baru dibuat dengan kata:", selected);
-      } else {
-        console.log("Join ke game existing:", gameId);
+
+        console.log("✅ Game baru dibuat, kata untuk", team, ":", selected);
+        window.location.href = `words.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+        return;
       }
 
-      // redirect ke words.html
+      // game sudah ada → validasi nama tim
+      const gameData = gameSnap.val();
+      if (gameData.teams && gameData.teams[team]) {
+        alert("❌ Nama tim sudah dipakai, pilih nama lain!");
+        return;
+      }
+
+      // ambil kata yang sudah dipakai tim lain
+      let used = [];
+      Object.values(gameData.teams || {}).forEach(t => {
+        used = used.concat(t.words || []);
+      });
+      const remaining = allWords.filter(w => !used.includes(w));
+
+      if (remaining.length < 4) {
+        alert("⚠️ Kata tidak cukup untuk tim baru!");
+        return;
+      }
+
+      const selected = remaining.sort(()=>Math.random()-0.5).slice(0,4);
+
+      // simpan kata untuk tim baru
+      await set(ref(db, `games/${gameId}/teams/${team}`), {
+        words: selected
+      });
+
+      console.log("✅ Tim baru join:", team, "dengan kata:", selected);
       window.location.href = `words.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
     }
 
