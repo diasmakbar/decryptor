@@ -50,4 +50,5 @@ Setiap tim berusaha mengomunikasikan kode rahasia **tanpa membuat lawan bisa men
 
 ---
 
-# Selamat bermain **Decrypto**!
+## Selamat bermain **Decrypto**!
+
