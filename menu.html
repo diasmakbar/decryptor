@@ -11,36 +11,58 @@
     .word{background:#333;padding:8px;border-radius:8px;margin:6px 0;font-weight:700}
     .btn{display:block;margin:12px auto;padding:14px;font-size:18px;border:none;border-radius:10px;max-width:300px;width:90%;background:#3b82f6;color:#fff;cursor:pointer}
     .btn:hover{background:#2563eb}
+    .scoreBoard{background:#222;padding:12px;border-radius:12px;text-align:center;font-weight:700;margin:20px auto;max-width:400px}
   </style>
 </head>
 <body>
   <h1 id="title">Team</h1>
 
   <div id="wordBox" class="card">Loading kata…</div>
+  <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
 
   <button class="btn" id="codeBtn">Generator Code</button>
   <button class="btn" id="ansBtn">Answer Input</button>
 
   <script type="module">
-    import { get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { onValue, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
-    import { teamRef, mountWinnerBanner } from "./game-utils.js";
+    import { teamRef, gameRef, mountWinnerBanner } from "./game-utils.js";
+    import { maybeScoreCurrentRound } from "./scoring.js";
 
     const params = new URLSearchParams(window.location.search);
     const gameId = params.get("gameId");
     const team = params.get("team");
     document.getElementById("title").textContent = `Team ${team}`;
+
+    // tampilkan banner menang/kalah
     mountWinnerBanner(gameId);
 
-    // tampilkan 4 kata unik
+    // tampilkan 4 kata unik tim
     const snap = await get(teamRef(gameId, team));
     const box = document.getElementById("wordBox");
     if (snap.exists()) {
       const { words = [] } = snap.val() || {};
-      box.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+      if (words.length) {
+        box.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+      } else {
+        box.textContent = "Kata tim belum di-generate.";
+      }
     } else {
       box.textContent = "Kata tidak ditemukan.";
     }
+
+    // scoreboard live
+    onValue(gameRef(gameId), (snap) => {
+      if (!snap.exists()) return;
+      const game = snap.val();
+      const teams = Object.keys(game.teams || {});
+      const scores = game.teams || {};
+      const scoreTxt = teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ");
+      document.getElementById("scoreBox").textContent = `Scoreboard → ${scoreTxt}`;
+
+      // cek scoring otomatis
+      maybeScoreCurrentRound(gameId);
+    });
 
     // tombol redirect
     document.getElementById("codeBtn").onclick = () => {

@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Answers</title>
+  <title>Decryptor - Answers</title>
   <style>
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:20px}
     h1{text-align:center}
+    .card{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:14px;margin:12px auto;max-width:420px;text-align:left}
+    .word{background:#333;padding:8px;border-radius:8px;margin:6px 0;font-weight:700}
     form{max-width:600px;margin:0 auto}
     .row{display:grid;grid-template-columns:1fr 120px;gap:8px;margin:8px 0}
     input,button{padding:10px;font-size:16px;border-radius:8px;border:1px solid #333}
@@ -22,6 +24,7 @@
 </head>
 <body>
   <h1 id="title">Answers</h1>
+  <div id="wordBox" class="card">Loading kata…</div>
 
   <form id="answerForm">
     <div class="row">
@@ -40,15 +43,14 @@
   </form>
 
   <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
-
   <div id="history" class="history"></div>
 
   <script type="module">
-    import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
-      gameRef, currentRoundRef, teamOrderRef,
-      getHostTeam, getOtherTeam, mountWinnerBanner
+      gameRef, currentRoundRef, teamRef, teamOrderRef,
+      getHostTeam, mountWinnerBanner
     } from "./game-utils.js";
     import { maybeScoreCurrentRound } from "./scoring.js";
 
@@ -62,6 +64,16 @@
     let currentRound = 1;
     let teamOrder = [];
 
+    // tampilkan kata tim
+    const wordBox = document.getElementById("wordBox");
+    const snap = await get(teamRef(gameId, team));
+    if (snap.exists()) {
+      const { words = [] } = snap.val() || {};
+      wordBox.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+    } else {
+      wordBox.textContent = "Kata tim tidak ditemukan.";
+    }
+
     onValue(currentRoundRef(gameId), (snap) => {
       if (snap.exists()) currentRound = snap.val();
     });
@@ -69,15 +81,15 @@
       if (snap.exists()) teamOrder = snap.val();
     });
 
-    // submit jawaban
+    // submit clue & guess
     document.getElementById("answerForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const clues   = [fd.get("clue1"), fd.get("clue2"), fd.get("clue3")].map(x => (x||"").trim());
       const guesses = [fd.get("guess1"), fd.get("guess2"), fd.get("guess3")];
 
-      if (clues.some(c => !c)) return alert("Isi semua CLUE (3 baris)!");
-      if (guesses.some(g => !g)) return alert("Isi semua ANGKA (3 baris)!");
+      if (clues.some(c => !c)) return alert("Isi semua CLUE!");
+      if (guesses.some(g => !g)) return alert("Isi semua ANGKA!");
       if (!guesses.every(g => /^[1-4]$/.test(String(g)))) return alert("Semua angka harus 1–4!");
 
       await set(ref(db, `games/${gameId}/rounds/${currentRound}/clues/${team}`), clues);
@@ -87,7 +99,7 @@
       maybeScoreCurrentRound(gameId);
     });
 
-    // render scoreboard + history
+    // scoreboard & history
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const game = snap.val();
@@ -95,11 +107,9 @@
       const teams = Object.keys(game.teams || {});
       const scores = game.teams || {};
 
-      // update scoreboard
-      const scoreTxt = teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ");
-      document.getElementById("scoreBox").textContent = `Scoreboard → ${scoreTxt}`;
+      document.getElementById("scoreBox").textContent =
+        `Scoreboard → ${teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ")}`;
 
-      // update history
       const body = document.getElementById("history");
       body.innerHTML = "";
 
@@ -115,8 +125,7 @@
         teams.forEach(t => {
           const clues   = r.clues?.[t]   ? r.clues[t].join(" | ")   : "-";
           const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
-          const answers = (r.guesses?.[t]) ? code : "-"; // muncul setelah tebakan
-
+          const answers = (r.guesses?.[t]) ? code : "-";
           html += `<div class="teamBox">
                      <b>${t}</b>
                      Clues: ${clues}<br/>

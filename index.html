@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Decryptor - Setup</title>
+  <title>Decryptor - Masuk</title>
   <style>
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
     h1{margin-bottom:20px}
@@ -32,32 +32,68 @@
       if (!/^\d{4}$/.test(gameId)) return alert("Game ID harus 4 digit angka!");
       if (!team) return alert("Isi nama tim!");
 
-      const gameRef = ref(db, `games/${gameId}`);
+      const gamePath = `games/${gameId}`;
+      const gameRef = ref(db, gamePath);
       const snap = await get(gameRef);
 
+      // ambil word list
+      const text = await fetch("words.txt").then(r => r.text());
+      const allWords = text.split("\n").map(w => w.trim()).filter(Boolean);
+
       if (!snap.exists()) {
-        // buat game baru
+        // game baru
+        const selected = shuffle(allWords).slice(0, 4);
         await set(gameRef, {
           currentRound: 1,
           winner: null,
           teamOrder: [team],
-          teams: { [team]: { words: [], ready: false, score: 0 } },
+          teams: {
+            [team]: { words: selected, ready: false, score: 0, hasGenerator: true }
+          },
           rounds: {}
         });
-      } else {
-        const game = snap.val();
-        if (game.teams && !game.teams[team]) {
-          // tambah tim baru
-          const newOrder = Array.isArray(game.teamOrder) ? [...game.teamOrder, team] : [team];
-          await update(ref(db), {
-            [`games/${gameId}/teams/${team}`]: { words: [], ready: false, score: 0 },
-            [`games/${gameId}/teamOrder`]: newOrder
-          });
-        }
+        return go("codes.html", gameId, team);
       }
 
-      // redirect ke selection page
-      window.location.href = `menu.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+      // game sudah ada
+      const game = snap.val();
+      const teams = game.teams || {};
+
+      if (!teams[team]) {
+        // tim baru → bagi kata unik
+        const used = Object.values(teams).flatMap(t => t.words || []);
+        const remaining = allWords.filter(w => !used.includes(w));
+        if (remaining.length < 4) return alert("Kata tersisa tidak cukup.");
+        const selected = shuffle(remaining).slice(0, 4);
+
+        const newOrder = Array.isArray(game.teamOrder) ? [...game.teamOrder, team] : [team];
+        await update(ref(db), {
+          [`${gamePath}/teams/${team}`]: { words: selected, ready: false, score: 0, hasGenerator: true },
+          [`${gamePath}/teamOrder`]: newOrder
+        });
+        return go("codes.html", gameId, team);
+      }
+
+      // tim sudah ada
+      if (!teams[team].hasGenerator) {
+        await update(ref(db), { [`${gamePath}/teams/${team}/hasGenerator`]: true });
+        return go("codes.html", gameId, team);
+      } else {
+        return go("answers.html", gameId, team);
+      }
+    }
+
+    function go(page, gameId, team) {
+      window.location.href = `${page}?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+    }
+
+    function shuffle(a) {
+      const x = [...a];
+      for (let i = x.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [x[i], x[j]] = [x[j], x[i]];
+      }
+      return x;
     }
   </script>
 </body>

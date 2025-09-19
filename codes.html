@@ -3,9 +3,12 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Generator Kode</title>
+  <title>Decryptor - Generator</title>
   <style>
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
+    h1{margin:10px 0}
+    .card{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:14px;margin:12px auto;max-width:420px}
+    .word{background:#333;padding:8px;border-radius:8px;margin:6px 0;font-weight:700}
     button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
     #genBtn{background:#22c55e;color:#111}
     #readyBtn{background:#3b82f6;color:#fff}
@@ -15,7 +18,7 @@
 </head>
 <body>
   <h1 id="hdr">Round</h1>
-  <div id="roleInfo" class="status"></div>
+  <div id="wordBox" class="card">Loading kata…</div>
   <div id="code">— — —</div>
   <div>
     <button id="genBtn">Generate Code</button>
@@ -27,8 +30,8 @@
     import { onValue, set, get, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
-      currentRoundRef, teamsRef, codeRef, teamOrderRef,
-      getHostTeam, getOtherTeam, generateUniqueCode,
+      currentRoundRef, teamsRef, codeRef, teamOrderRef, teamRef,
+      getHostTeam, generateUniqueCode,
       setBtnEnabled, renderReadyStatus, advanceRoundAndResetReady,
       mountWinnerBanner
     } from "./game-utils.js";
@@ -36,7 +39,7 @@
 
     const params = new URLSearchParams(window.location.search);
     const gameId = params.get("gameId");
-    const myTeam = params.get("team"); // team nama
+    const myTeam = params.get("team");
 
     mountWinnerBanner(gameId);
 
@@ -44,51 +47,56 @@
     let teamOrder = [];
 
     const hdr = document.getElementById("hdr");
-    const roleInfo = document.getElementById("roleInfo");
     const codeBox = document.getElementById("code");
     const genBtn = document.getElementById("genBtn");
     const readyBtn = document.getElementById("readyBtn");
     const readyState = document.getElementById("readyState");
 
-    // Listen teamOrder
+    // tampilkan kata tim
+    const wordBox = document.getElementById("wordBox");
+    const snap = await get(teamRef(gameId, myTeam));
+    if (snap.exists()) {
+      const { words = [] } = snap.val() || {};
+      wordBox.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+    } else {
+      wordBox.textContent = "Kata tim tidak ditemukan.";
+    }
+
+    // listen teamOrder
     onValue(teamOrderRef(gameId), (snap) => {
       teamOrder = snap.val() || teamOrder;
       updateRoleUI();
     });
 
-    // Listen round
+    // listen round
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       currentRound = snap.val();
       hdr.textContent = `Round ${currentRound}`;
-      codeBox.textContent = "— — —"; // reset view tiap berganti round
+      codeBox.textContent = "— — —";
       updateRoleUI();
     });
 
-    // Listen code for current round
+    // listen code untuk ronde ini
     function attachCodeListener() {
       onValue(codeRef(gameId, currentRound), (snap) => {
         if (snap.exists()) {
           codeBox.textContent = snap.val().join(" - ");
-          // begitu code ada, semua tim boleh klik ready
           setBtnEnabled(readyBtn, true);
         } else {
           codeBox.textContent = "— — —";
           setBtnEnabled(readyBtn, false);
         }
-        // setiap perubahan, coba scoring (idempotent & hanya round>=3)
         maybeScoreCurrentRound(gameId);
       });
     }
     attachCodeListener();
 
-    // Listen ready states dan auto-advance jika semua ready
+    // listen ready states
     onValue(teamsRef(gameId), async (snap) => {
       const teamsObj = snap.val() || {};
       renderReadyStatus(readyState, teamsObj);
-
-      // semua ready?
-      const allReady = Object.values(teamsObj).length >= 2 && Object.values(teamsObj).every(t => t.ready === true);
+      const allReady = Object.values(teamsObj).length >= 2 && Object.values(teamsObj).every(t => t.ready);
       if (allReady) {
         await advanceRoundAndResetReady(gameId, currentRound + 1, teamsObj);
       }
@@ -97,39 +105,20 @@
     function updateRoleUI() {
       const host = getHostTeam(teamOrder, currentRound);
       const isHost = host && myTeam === host;
-
-      roleInfo.textContent = isHost
-        ? `Peran Anda: HOST (hanya Anda yang bisa Generate Code untuk ronde ini)`
-        : `Peran Anda: PLAYER (menunggu host generate code)`;
-
-      // tombol generate hanya aktif untuk host, dan hanya sekali per ronde (disable jika code sudah ada)
-      setBtnEnabled(genBtn, false);
-      setBtnEnabled(readyBtn, false);
-
-      // cek apakah code sudah ada untuk ronde ini
-      get(codeRef(gameId, currentRound)).then((snap) => {
-        const hasCode = snap.exists();
-        if (isHost) {
-          setBtnEnabled(genBtn, !hasCode);   // host boleh generate jika belum ada code
-          setBtnEnabled(readyBtn, hasCode);  // host siap next setelah generate
-        } else {
-          // player: hanya boleh ready setelah code ada
-          setBtnEnabled(readyBtn, hasCode);
-        }
-      });
+      setBtnEnabled(genBtn, isHost);
+      if (!isHost) {
+        setBtnEnabled(readyBtn, false); // non-host tunggu host generate
+      }
     }
 
-    // Click handlers
     genBtn.addEventListener("click", async () => {
-      // host generate code unik 3 angka
       const code = generateUniqueCode();
       await set(codeRef(gameId, currentRound), code);
-      updateRoleUI();
+      setBtnEnabled(genBtn, false);
     });
 
     readyBtn.addEventListener("click", async () => {
-      await update((await import("./game-utils.js")).teamRef(gameId, myTeam), { ready: true });
-      updateRoleUI();
+      await update(teamRef(gameId, myTeam), { ready: true });
     });
   </script>
 </body>
