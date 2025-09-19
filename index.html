@@ -32,7 +32,7 @@
       if (!/^\d{4}$/.test(gameId)) return alert("Game ID harus 4 digit angka!");
       if (!team) return alert("Isi nama tim!");
 
-      const gamePath = `games/${gameId}`;
+      const gamePath = `games/decrypto/${gameId}`;
       const gameRef = ref(db, gamePath);
       const snap = await get(gameRef);
 
