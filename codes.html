@@ -35,7 +35,7 @@
     import { db } from "./firebase.js";
     import {
       currentRoundRef, teamsRef, codeRef, teamOrderRef, teamRef, gameRef,
-      getHostTeam, getOtherTeam, generateUniqueCode,
+      getHostTeam, generateUniqueCode,
       setBtnEnabled, renderReadyStatus, advanceRoundAndResetReady,
       mountWinnerBanner
     } from "./game-utils.js";
@@ -49,6 +49,7 @@
 
     let currentRound = 1;
     let teamOrder = [];
+    let codeUnsub = null;
 
     const hdr = document.getElementById("hdr");
     const codeBox = document.getElementById("code");
@@ -82,35 +83,36 @@
       updateRoleUI();
     });
 
-    // listen round
+    // listener code per round
+    function attachCodeListener(round) {
+      if (codeUnsub) codeUnsub(); // unsubscribe lama
+      codeUnsub = onValue(codeRef(gameId, round), (snap) => {
+        const host = getHostTeam(teamOrder, round);
+        const isHost = host && myTeam === host;
+        const hasCode = snap.exists();
+
+        if (isHost && hasCode) {
+          codeBox.textContent = snap.val().join(" - ");
+        } else {
+          codeBox.textContent = "— — —";
+        }
+
+        setBtnEnabled(readyBtn, hasCode);
+        maybeScoreCurrentRound(gameId);
+      });
+    }
+
+    // listen currentRound
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       currentRound = snap.val();
       hdr.textContent = `Round ${currentRound}`;
       codeBox.textContent = "— — —";
       updateRoleUI();
+      attachCodeListener(currentRound); // attach listener baru tiap round
     });
 
-    // listen code → TAMPILKAN HANYA KE HOST
-    function bindCodeListener() {
-      onValue(codeRef(gameId, currentRound), (snap) => {
-        const host = getHostTeam(teamOrder, currentRound);
-        const isHost = host && myTeam === host;
-        const hasCode = snap.exists();
-        if (isHost && hasCode) {
-          codeBox.textContent = snap.val().join(" - ");
-        } else {
-          codeBox.textContent = "— — —"; // non-host tidak pernah lihat kode
-        }
-        // ready aktif untuk semua tim SETELAH kode dibuat
-        setBtnEnabled(readyBtn, hasCode);
-        // coba skor jika kedua tim sudah submit (idempotent)
-        maybeScoreCurrentRound(gameId);
-      });
-    }
-    bindCodeListener();
-
-    // ready state + auto advance
+    // listen ready states
     onValue(teamsRef(gameId), async (snap) => {
       const teamsObj = snap.val() || {};
       renderReadyStatus(readyState, teamsObj);
@@ -122,12 +124,10 @@
     function updateRoleUI() {
       const host = getHostTeam(teamOrder, currentRound);
       const isHost = host && myTeam === host;
-      // hanya host yang bisa generate; non-host tidak
-      setBtnEnabled(genBtn, false);
+      // hanya host yang bisa generate
       get(codeRef(gameId, currentRound)).then(snap => {
         const hasCode = snap.exists();
-        if (isHost) setBtnEnabled(genBtn, !hasCode);
-        // readyBtn enable/disable di listener code
+        setBtnEnabled(genBtn, isHost && !hasCode);
       });
     }
 
