@@ -8,7 +8,28 @@
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
     h1{margin:10px 0}
     .card{background:#0b3fad;border:1px solid #154bc2;border-radius:12px;padding:14px;margin:12px auto;max-width:520px}
-    .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:10px;border-radius:10px;margin:8px 0}
+    /* .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:10px;border-radius:10px;margin:8px 0} */
+    .wordGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* default web: 4 kolom */
+    gap: 12px;
+    max-width: 800px;
+    margin: 0 auto;
+    }
+    .word {
+    background: #2563eb;
+    color: #fff;
+    font-weight: 800;
+    font-size: 18px;
+    padding: 14px;
+    border-radius: 10px;
+    text-align: center;
+    }
+    @media (max-width: 600px) {
+    .wordGrid {
+        grid-template-columns: repeat(2, 1fr); /* mobile: 2 kolom */
+    }
+    }
     button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
     #genBtn{background:#22c55e;color:#111}
     #readyBtn{background:#3b82f6;color:#fff}
@@ -63,7 +84,8 @@
     const wSnap = await get(teamRef(gameId, myTeam));
     if (wSnap.exists()) {
       const { words = [] } = wSnap.val() || {};
-      wordBox.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+    //   wordBox.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+            wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
     } else {
       wordBox.textContent = "Kata tim tidak ditemukan.";
     }
