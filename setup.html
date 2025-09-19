@@ -1,0 +1,51 @@
+<body>
+  <h1>Setup Nama Tim</h1>
+  <input id="teamName" placeholder="Nama Tim"/>
+  <button onclick="start()">Mulai Game</button>
+
+  <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
+
+  const firebaseConfig = {
+      apiKey: "AIzaSyCbZ5Ca6sMcCdYTE5A1hCq6Vr3NJvPotAQ",
+      authDomain: "decryptor-game.firebaseapp.com",
+      projectId: "decryptor-game",
+      storageBucket: "decryptor-game.firebasestorage.app",
+      messagingSenderId: "285400526933",
+      appId: "1:285400526933:web:8c8f9f4fc39c97c8c8a4dc",
+      measurementId: "G-ZRDVJX3P31"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  </script>
+
+  <script type="module">
+    import { ref, set } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+    import { db } from "./firebase.js"; // atau kalau inline, langsung pakai window.db
+
+    async function start() {
+      const team = document.getElementById("teamName").value.trim();
+      if (!team) { alert("Isi nama tim!"); return; }
+
+      // generate ID unik
+      const gameId = Date.now().toString();
+
+      // ambil wordlist
+      const text = await fetch("words.txt").then(r=>r.text());
+      const all = text.split("\n").map(w=>w.trim()).filter(Boolean);
+      const selected = all.sort(()=>Math.random()-0.5).slice(0,4);
+
+      // simpan ke firebase
+      await set(ref(db, `games/${gameId}`), {
+        teamName: team,
+        words: selected,
+        rounds: {}
+      });
+
+      // redirect
+      window.location.href = `words.html?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+    }
+  </script>
+</body>
