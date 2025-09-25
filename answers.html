@@ -15,6 +15,7 @@
     .inputs input{margin:6px;padding:10px;border-radius:8px;border:1px solid #444;width:140px;text-align:center}
     button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
     #submitBtn{background:#22c55e;color:#111}
+    #readyBtn{background:#3b82f6;color:#fff;display:none}
     .status{opacity:.9;margin-top:12px}
     .scoreBoard{background:#222;padding:10px;border-radius:10px;max-width:520px;margin:14px auto}
     .history{max-width:900px;margin:18px auto;text-align:left}
@@ -48,16 +49,16 @@
 
   <button id="submitBtn">Submit</button>
   <div id="answerStatus" class="status"></div>
+  <button id="readyBtn">Ready for Next Round</button>
 
   <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
-
   <div id="history" class="history"></div>
 
   <script type="module">
     import { ref, onValue, update, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
-      currentRoundRef, teamRef, roundRef, gameRef, teamOrderRef, getHostTeam
+      currentRoundRef, teamRef, roundRef, gameRef, getHostTeam
     } from "./game-utils.js";
     import { maybeScoreCurrentRound } from "./scoring.js";
 
@@ -69,68 +70,33 @@
     const wordBox = document.getElementById("wordBox");
     const submitBtn = document.getElementById("submitBtn");
     const answerStatus = document.getElementById("answerStatus");
+    const readyBtn = document.getElementById("readyBtn");
     const historyDiv = document.getElementById("history");
     const scoreBox = document.getElementById("scoreBox");
 
     let currentRound = 1;
     let roundUnsub = null;
-    let teamOrder = [];
+    let totalTeams = 0;
 
-    // render kata tim (4 kotak biru)
-    (async () => {
-      const wSnap = await get(teamRef(gameId, team));
-      if (wSnap.exists()) {
-        const { words = [] } = wSnap.val() || {};
-        wordBox.innerHTML = words
-          .map((w,i)=>`<div class="word">${w}<small>${i+1}</small></div>`)
-          .join("");
-      } else {
-        wordBox.innerHTML = `<div style="grid-column:1/-1;text-align:center;opacity:.8">Kata tim tidak ditemukan.</div>`;
-      }
-    })();
+    // tampilkan kata tim
+    const wSnap = await get(teamRef(gameId, team));
+    if (wSnap.exists()) {
+      const { words = [] } = wSnap.val() || {};
+      wordBox.innerHTML = words.map((w,i)=>`<div class="word">${w}<small>${i+1}</small></div>`).join("");
+    } else {
+      wordBox.innerHTML = `<div style="grid-column:1/-1;text-align:center;opacity:.8">Kata tim tidak ditemukan.</div>`;
+    }
 
-    // scoreboard + full history (only revealed rounds)
+    // scoreboard + totalTeams
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const game = snap.val();
-      const teams = Object.keys(game.teams || {});
-      const scores = game.teams || {};
-
-      // scoreboard
-      scoreBox.textContent = `Scoreboard → ${teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ")}`;
-
-      // history across rounds — ONLY revealed
-      const rounds = game.rounds || {};
-      const orderSnap = game.teamOrder || [];
-      teamOrder = orderSnap;
-
-      historyDiv.innerHTML = "";
-      Object.keys(rounds).map(n=>Number(n)).sort((a,b)=>a-b).forEach(num => {
-        const r = rounds[num];
-        if (r?.revealed !== true) return; // ⛔️ tampilkan hanya setelah revealed
-
-        const host = getHostTeam(teamOrder, num);
-        const codeTxt = Array.isArray(r.code) ? r.code.join(" - ") : "-";
-        let html = `<div class="roundCard">
-                      <div class="roundHeader">Round ${num} - Giliran Team ${host} speak up!</div>
-                      <div class="teamRow">`;
-        teams.forEach(t => {
-          const clues   = r.clues?.[t]   ? r.clues[t].join(" | ")   : "-";
-          const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
-          const answers = r.guesses?.[t] ? codeTxt : "-";
-          html += `<div class="teamBox">
-                     <b>${t}</b>
-                     Clues: ${clues}<br/>
-                     Guesses: ${guesses}<br/>
-                     Answers: ${answers}
-                   </div>`;
-        });
-        html += `</div></div>`;
-        historyDiv.innerHTML += html;
-      });
+      const teams = game.teams || {};
+      totalTeams = Object.keys(teams).length;
+      scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => `${t}: ${v?.score ?? 0}`).join(" | ")}`;
     });
 
-    // watch currentRound → reset UI and bind per-round watcher
+    // watch currentRound
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const newRound = snap.val();
@@ -142,16 +108,29 @@
       }
     });
 
-    // per-round watcher: lock submit if this team already submitted
     function bindThisRoundWatcher(round) {
       if (roundUnsub) roundUnsub();
       roundUnsub = onValue(roundRef(gameId, round), (snap) => {
-        // if (!snap.exists()) { resetFormUI(); return; }
-        if (!snap.exists()) { return; }
+        if (!snap.exists()) return;
         const r = snap.val() || {};
         const already = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3;
+        const guessesCount = Object.keys(r.guesses || {}).length;
+
         submitBtn.disabled = !!already;
-        answerStatus.textContent = already ? "✅ Jawaban terkirim, tunggu tim lain..." : "";
+
+        if (already && !r.revealed) {
+          answerStatus.textContent =
+            `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
+          readyBtn.style.display = "none";
+          readyBtn.disabled = true;
+        }
+
+        if (r.revealed) {
+          answerStatus.textContent = "";
+          renderHistory(r);
+          readyBtn.style.display = "inline-block";
+          readyBtn.disabled = false;
+        }
       });
     }
 
@@ -174,9 +153,14 @@
       });
 
       submitBtn.disabled = true;
-      answerStatus.textContent = "✅ Jawaban terkirim, tunggu tim lain...";
-      // kalau kedua tim sudah submit, scoring.js akan set revealed=true + update skor
+      answerStatus.textContent = `✅ Jawaban terkirim, tunggu tim lain... (1/${totalTeams})`;
       maybeScoreCurrentRound(gameId);
+    });
+
+    // tombol ready
+    readyBtn.addEventListener("click", async () => {
+      await update(teamRef(gameId, team), { ready: true });
+      readyBtn.disabled = true;
     });
 
     function resetFormUI() {
@@ -186,6 +170,28 @@
       });
       submitBtn.disabled = false;
       answerStatus.textContent = "";
+      readyBtn.style.display = "none";
+      readyBtn.disabled = true;
+    }
+
+    function renderHistory(r) {
+      const host = getHostTeam(Object.keys(r.teams||{}), currentRound);
+      const codeTxt = Array.isArray(r.code) ? r.code.join(" - ") : "-";
+      historyDiv.innerHTML = `<div class="roundCard">
+        <div class="roundHeader">Round ${currentRound} - Giliran Team ${host} speak up!</div>
+        <div class="teamRow">
+          ${Object.keys(r.guesses || {}).map(t => {
+            const clues = r.clues?.[t] ? r.clues[t].join(" | ") : "-";
+            const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
+            return `<div class="teamBox">
+                      <b>${t}</b>
+                      Clues: ${clues}<br/>
+                      Guesses: ${guesses}<br/>
+                      Answers: ${codeTxt}
+                    </div>`;
+          }).join("")}
+        </div>
+      </div>`;
     }
   </script>
 </body>

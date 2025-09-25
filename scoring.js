@@ -1,80 +1,89 @@
 // scoring.js
-import {
-  ref, get, update, runTransaction
-} from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, get, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { db } from "./firebase.js";
-import {
-  gameRef, roundRef, teamsRef, teamOrderRef,
-  getHostTeam, getOtherTeam
-} from "./game-utils.js";
+import { gameRef, roundRef, getHostTeam, getOtherTeam } from "./game-utils.js";
 
-/**
- * Aturan skor:
- * - Host salah (round >=1)  => host -1
- * - Lawan benar (round >=3) => lawan +1
- * Round direveal (rounds/{r}/revealed=true) HANYA setelah kedua tim sudah submit.
- * Pemenang:
- * - host.score <= -2 -> other menang
- * - other.score >= 2 -> other menang
- */
 export async function maybeScoreCurrentRound(gameId) {
   const gameSnap = await get(gameRef(gameId));
   if (!gameSnap.exists()) return;
   const game = gameSnap.val();
+
   const round = game.currentRound || 1;
+  const teams = game.teams || {};
+  const teamCount = Object.keys(teams).length;
+  const roundSnap = await get(roundRef(gameId, round));
+  if (!roundSnap.exists()) return;
+  const r = roundSnap.val();
 
-  const rSnap = await get(roundRef(gameId, round));
-  if (!rSnap.exists()) return;
-  const rData = rSnap.val() || {};
-  const code = rData.code;
-  if (!Array.isArray(code) || code.length !== 3) return;
+  const guesses = r.guesses || {};
+  const clues   = r.clues   || {};
+  const code    = r.code    || null;
 
-  // order tim
-  const orderSnap = await get(teamOrderRef(gameId));
-  const teamOrder = orderSnap.val();
-  if (!Array.isArray(teamOrder) || teamOrder.length < 2) return;
+  // belum ada kode → skip
+  if (!code) return;
 
-  const hostTeam = getHostTeam(teamOrder, round);
-  const otherTeam = getOtherTeam(teamOrder, round);
-  const guesses = rData.guesses || {};
-  const hostGuess  = guesses[hostTeam];
-  const otherGuess = guesses[otherTeam];
+  // cek apakah semua tim sudah submit
+  const submittedTeams = Object.keys(guesses).length;
+  if (submittedTeams < teamCount) return; // tunggu semua submit
 
-  // tunggu sampai kedua guess ada → baru reveal & skor
-  if (!Array.isArray(hostGuess) || hostGuess.length !== 3) return;
-  if (!Array.isArray(otherGuess) || otherGuess.length !== 3) return;
+  // ✅ Semua tim sudah submit → lanjut scoring
+  let newScores = { ...teams };
 
-  // ensure idempotent: pakai transaction pada flag 'scored'
-  const scoredRef = ref(db, `games/${gameId}/rounds/${round}/scored`);
-  const trx = await runTransaction(scoredRef, (prev) => (prev === true ? undefined : true));
-  if (!trx.committed || trx.snapshot.val() !== true) return;
+  const hostTeam  = getHostTeam(Object.keys(teams), round);
+  const otherTeam = getOtherTeam(Object.keys(teams), round);
+  const codeKey   = code.join("-");
 
-  // Ambil skor terkini
-  const tSnap = await get(teamsRef(gameId));
-  const teams = tSnap.val() || {};
-  let hostScore  = (teams[hostTeam]?.score ?? 0);
-  let otherScore = (teams[otherTeam]?.score ?? 0);
+  Object.entries(guesses).forEach(([t, g]) => {
+    const guessKey = g.join("-");
+    if (t === hostTeam) {
+      // host salah → minus 1
+      if (guessKey !== codeKey) {
+        newScores[t].score = (newScores[t].score || 0) - 1;
+      }
+    } else {
+      // tim lawan: poin baru dihitung mulai round ke-(teamCount+1)
+      if (round >= teamCount + 1 && guessKey === codeKey) {
+        newScores[t].score = (newScores[t].score || 0) + 1;
+      }
+    }
+  });
 
-  const codeKey  = code.join("-");
-  const hostKey  = hostGuess.join("-");
-  const otherKey = otherGuess.join("-");
+  // update Firebase
+  const updates = {};
 
-  // host salah mulai round 1
-  if (hostKey !== codeKey) hostScore -= 1;
-  // lawan benar mulai round 3
-  if (round >= 3 && otherKey === codeKey) otherScore += 1;
+  // update skor tiap tim
+  Object.entries(newScores).forEach(([t, obj]) => {
+    updates[`games/decrypto/${gameId}/teams/${t}/score`] = obj.score;
+  });
 
-  const updates = {
-    [`games/${gameId}/rounds/${round}/revealed`]: true, // tampilkan di history setelah dua-duanya submit
-    [`games/${gameId}/teams/${hostTeam}/score`]:  hostScore,
-    [`games/${gameId}/teams/${otherTeam}/score`]: otherScore
-  };
+  // tandai round sudah direveal
+  updates[`games/decrypto/${gameId}/rounds/${round}/revealed`] = true;
 
   // cek pemenang
-  let winner = null;
-  if (hostScore <= -2) winner = otherTeam;
-  if (otherScore >= 2) winner = otherTeam;
-  if (winner) updates[`games/${gameId}/winner`] = winner;
+  const winner = checkWinner(newScores);
+  if (winner) {
+    updates[`games/decrypto/${gameId}/winner`] = winner;
+  }
 
   await update(ref(db), updates);
+}
+
+// ✅ Cek pemenang: 
+// - Kalau ada tim dengan score <= -2 → kalah → tim lain menang
+// - Kalau ada tim dengan score >= +2 → langsung menang
+function checkWinner(teams) {
+  const entries = Object.entries(teams);
+
+  // cek kalah -2
+  const loser = entries.find(([t, obj]) => (obj.score || 0) <= -2);
+  if (loser) {
+    const winner = entries.find(([t, obj]) => t !== loser[0]);
+    return winner ? winner[0] : null;
+  }
+
+  // cek menang +2
+  const win = entries.find(([t, obj]) => (obj.score || 0) >= 2);
+  if (win) return win[0];
+
+  return null;
 }
