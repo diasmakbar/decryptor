@@ -75,19 +75,26 @@
     //   if (!Array.isArray(words)) words = Object.values(words);
     //   wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
     // }
-    const wordBox = document.getElementById("wordBox");
-    const wSnap = await get(teamRef(gameId, myTeam));
+    const WordBox = document.getElementById("WordBox");
+    const wSnap = await get(teamRef(gameId, team));
     if (wSnap.exists()) {
-      const { words = [] } = wSnap.val() || {};
-            wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
-    } else {
-      wordBox.textContent = "Kata tim tidak ditemukan.";
+      let words = wSnap.val().words || [];
+      if (!Array.isArray(words)) words = Object.values(words);
+      WordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
     }
 
     // scoreboard
+    // onValue(gameRef(gameId), (snap) => {
+    //   if (!snap.exists()) return;
+    //   const teams = snap.val().teams || {};
+    //   scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
+    //     `${t}: ${v?.score ?? 0}`).join(" | ")}`;
+    // });
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
-      const teams = snap.val().teams || {};
+      const game = snap.val();
+      const teams = game.teams || {};
+      teamNames = Object.keys(teams);
       scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
         `${t}: ${v?.score ?? 0}`).join(" | ")}`;
     });
