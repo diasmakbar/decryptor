@@ -68,12 +68,20 @@
     if (!pSnap.exists() || pSnap.val()?.role !== "speaker") location.replace(`index.html`);
 
     // tampilkan kata tim
+    // const wordBox = document.getElementById("wordBox");
+    // const wSnap = await get(teamRef(gameId, myTeam));
+    // if (wSnap.exists()) {
+    //   let words = wSnap.val().words || [];
+    //   if (!Array.isArray(words)) words = Object.values(words);
+    //   wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
+    // }
     const wordBox = document.getElementById("wordBox");
     const wSnap = await get(teamRef(gameId, myTeam));
     if (wSnap.exists()) {
-      let words = wSnap.val().words || [];
-      if (!Array.isArray(words)) words = Object.values(words);
-      wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
+      const { words = [] } = wSnap.val() || {};
+            wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
+    } else {
+      wordBox.textContent = "Kata tim tidak ditemukan.";
     }
 
     // scoreboard
