@@ -15,16 +15,13 @@
     .inputs input{margin:6px;padding:10px;border-radius:8px;border:1px solid #444;width:140px;text-align:center}
     button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
     #submitBtn{background:#22c55e;color:#111}
-    #readyBtn{background:#3b82f6;color:#fff;display:none}
     .status{opacity:.9;margin-top:12px}
     .scoreBoard{background:#222;padding:10px;border-radius:10px;max-width:520px;margin:14px auto}
     .history{max-width:900px;margin:18px auto;text-align:left}
     .roundCard{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:16px;margin:18px 0}
     .roundHeader{font-weight:700;margin-bottom:12px;text-align:center}
-    .teamRow{display:grid;grid-template-columns:1fr 1fr;gap:20px}
     .teamBox{background:#111;padding:12px;border-radius:8px}
     .teamBox b{display:block;margin-bottom:6px}
-    @media (max-width:700px){.teamRow{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -49,7 +46,6 @@
 
   <button id="submitBtn">Submit</button>
   <div id="answerStatus" class="status"></div>
-  <button id="readyBtn">Ready for Next Round</button>
 
   <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
   <div id="history" class="history"></div>
@@ -70,7 +66,6 @@
     const wordBox = document.getElementById("wordBox");
     const submitBtn = document.getElementById("submitBtn");
     const answerStatus = document.getElementById("answerStatus");
-    const readyBtn = document.getElementById("readyBtn");
     const historyDiv = document.getElementById("history");
     const scoreBox = document.getElementById("scoreBox");
 
@@ -89,80 +84,60 @@
     }
 
     // scoreboard + totalTeams
-    // onValue(gameRef(gameId), (snap) => {
-    //   if (!snap.exists()) return;
-    //   const game = snap.val();
-    //   const teams = game.teams || {};
-    //   teamNames = Object.keys(teams);
-    //   totalTeams = teamNames.length;
-    //   scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => `${t}: ${v?.score ?? 0}`).join(" | ")}`;
-    // });
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const game = snap.val();
       const teams = game.teams || {};
-      totalTeams = Object.keys(teams).length;
       teamNames = Object.keys(teams);
-
-      // scoreboard
+      totalTeams = teamNames.length;
       scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
         `${t}: ${v?.score ?? 0}${v?.eliminated ? " ❌" : ""}`
       ).join(" | ")}`;
-
-      // cek kalau tim lo eliminated
       if (teams[team]?.eliminated) {
         submitBtn.disabled = true;
-        readyBtn.disabled = true;
         answerStatus.textContent = "❌ Tim kamu sudah gugur!";
       }
     });
 
-
-    // watch currentRound
+    // watch currentRound (attach listener sejak round 1)
     onValue(currentRoundRef(gameId), (snap) => {
-          if (!snap.exists()) return;
-          const newRound = snap.val();
-          if (newRound !== currentRound) {
-            currentRound = newRound;
-            hdr.textContent = `Round ${currentRound}`;
-            resetFormUI();
-            bindThisRoundWatcher(currentRound);
-          }
-        });
-
-        function bindThisRoundWatcher(round) {
-          if (roundUnsub) roundUnsub();
-          roundUnsub = onValue(roundRef(gameId, round), (snap) => {
       if (!snap.exists()) return;
-      const r = snap.val() || {};
-      const already = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3;
-      const guessesCount = Object.keys(r.guesses || {}).length;
-
-      submitBtn.disabled = !!already;
-
-      if (r.revealed) {
-        // ✅ Round selesai → tampilkan history & enable Ready
-        answerStatus.textContent = "";
-        renderHistory(r);
-        readyBtn.style.display = "inline-block";
-        readyBtn.disabled = false;
-        return;
+      const newRound = snap.val();
+      if (newRound !== currentRound) {
+        currentRound = newRound;
+        hdr.textContent = `Round ${currentRound}`;
+        resetFormUI();
       }
-
-      // kalau belum revealed
-      if (already) {
-        answerStatus.textContent =
-          `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
-      } else {
-        answerStatus.textContent = "";
-      }
-      readyBtn.style.display = "none";
-      readyBtn.disabled = true;
+      bindThisRoundWatcher(currentRound);
     });
 
+    function bindThisRoundWatcher(round) {
+      if (roundUnsub) roundUnsub();
+      roundUnsub = onValue(roundRef(gameId, round), (snap) => {
+        if (!snap.exists()) return;
+        const r = snap.val() || {};
+        const already = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3;
+        const guessesCount = Object.keys(r.guesses || {}).length;
+
+        submitBtn.disabled = !!already;
+
+        if (r.revealed) {
+          // round selesai → tampilkan history tim sendiri
+          const host = getHostTeam(teamNames, currentRound);
+          answerStatus.textContent = "";
+          renderHistory(r, host);
+        } else {
+          if (already) {
+            answerStatus.textContent =
+              `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
+          } else {
+            answerStatus.textContent = "";
+          }
+        }
+      });
     }
 
-    // submit
+    // submit jawaban
     submitBtn.addEventListener("click", async () => {
       const c1 = document.getElementById("clue1").value.trim();
       const c2 = document.getElementById("clue2").value.trim();
@@ -185,12 +160,6 @@
       maybeScoreCurrentRound(gameId);
     });
 
-    // tombol ready
-    readyBtn.addEventListener("click", async () => {
-      await update(teamRef(gameId, team), { ready: true });
-      readyBtn.disabled = true;
-    });
-
     function resetFormUI() {
       ["clue1","clue2","clue3","num1","num2","num3"].forEach(id => {
         const el = document.getElementById(id);
@@ -198,26 +167,21 @@
       });
       submitBtn.disabled = false;
       answerStatus.textContent = "";
-      readyBtn.style.display = "none";
-      readyBtn.disabled = true;
+      historyDiv.innerHTML = "";
     }
 
-    function renderHistory(r) {
-      const host = getHostTeam(teamNames, currentRound);
+    function renderHistory(r, host) {
       const codeTxt = Array.isArray(r.code) ? r.code.join(" - ") : "-";
+      const clues = r.clues?.[team] ? r.clues[team].join(" | ") : "-";
+      const guesses = r.guesses?.[team] ? r.guesses[team].join(" - ") : "-";
+
       historyDiv.innerHTML = `<div class="roundCard">
-        <div class="roundHeader">Round ${currentRound} - Giliran Team ${host} speak up!</div>
-        <div class="teamRow">
-          ${teamNames.map(t => {
-            const clues = r.clues?.[t] ? r.clues[t].join(" | ") : "-";
-            const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
-            return `<div class="teamBox">
-                      <b>${t}</b>
-                      Clues: ${clues}<br/>
-                      Guesses: ${guesses}<br/>
-                      Answers: ${codeTxt}
-                    </div>`;
-          }).join("")}
+        <div class="roundHeader">Round ${currentRound} - Giliran Team ${host} kasih clue!</div>
+        <div class="teamBox">
+          <b>${team}</b><br/>
+          Clues: ${clues}<br/>
+          Guesses: ${guesses}<br/>
+          Answers: ${codeTxt}
         </div>
       </div>`;
     }
