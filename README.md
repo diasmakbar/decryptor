@@ -1,54 +1,48 @@
-﻿# Decrypto
+﻿# Decrypto Games 🎲
 
-## 🎮 Tujuan Game
-Decrypto adalah game **tim vs tim** (minimal 2 tim, masing-masing 2+ pemain).  
-Setiap tim berusaha mengomunikasikan kode rahasia **tanpa membuat lawan bisa menebaknya**, sambil mencoba **mendengarkan dan menebak kode lawan**.
+Game ini dimainkan oleh **2 tim atau lebih**.  
+Setiap tim memiliki **4 kata rahasia** yang ditandai angka 1 sampai 4.  
 
----
-
-## 📝 Setup
-- Setiap tim memiliki **4 kata kunci** (ditampilkan di layar/di meja).  
-- Kartu kode berisi **urutan angka 1-4** (contoh: `2-4-1`).  
-- Seorang pemain di tiap tim menjadi **Encryptor** dan memberi 3 clue untuk merepresentasikan kode.  
-- Rekan satu tim harus menebak kode urutannya.
+Di setiap ronde, satu tim akan menjadi **Host** yang mendapat **kode rahasia** (urutan 3 angka).  
+Tugas Host adalah memberi **clue** sesuai kode tersebut, lalu semua tim mencoba menebak kode dengan benar.
 
 ---
 
-## 🔄 Jalannya Ronde
-1. **Encryptor** melihat kartu kode rahasia (misal: `2-4-1`).  
-2. Encryptor memberi **3 clue kata** sesuai urutan kode (cluenya mereferensikan kata kunci ke-2, lalu ke-4, lalu ke-1).  
-3. **Tim sendiri** mencoba menebak urutan kode → jika benar, lanjut.  
-4. **Tim lawan** juga mencoba menebak kode tim tersebut (berdasarkan clue yang sudah diberikan sepanjang permainan).  
+## 🎙️ Peran Clue Speakers (Pemberi Clue)
+
+1. Kamu akan melihat 4 kata rahasia timmu (dengan nomor 1–4).
+2. Jika giliran tim kamu menjadi Host:
+   - Tekan tombol **Generate Code**, sistem akan memberi kode 3 angka, contoh: `[2 – 4 – 1]`.
+   - Buat clue (kata atau frasa singkat) untuk tiap angka sesuai urutan.
+   - Tekan tombol **Start Timer** untuk membatasi diskusi tim lawan.
+3. Clue harus membantu Hunter timmu menebak, **tapi jangan terlalu jelas**, karena lawan juga mengamati pola clue.
+4. Setelah ronde selesai, klik **Ready for Next Round**, berlaku baik saat giliran timmu maupun tim lawan.
 
 ---
 
-## 🧮 Sistem Skoring
-- **Miscommunication Token (Kesalahan)**  
-  - Jika tim **salah menebak kode mereka sendiri**, mereka mendapat **minus 1 poin**.  
-  - **minus 2 poin = Tim kalah.**  
+## 🔎 Peran Clue Hunters (Penebak Clue)
 
-- **Intercept Token (Intersepsi)**  
-  - Jika tim lawan berhasil **menebak kode tim lain dengan benar**, mereka mendapat **1 poin positif**.  
-  - **2 poin positif = Tim menang.**  
-
-- Game langsung selesai saat ada tim yang memenuhi salah satu kondisi di atas.  
+1. Kamu akan menerima clue dari Speaker timmu (3 clue sesuai urutan kode ronde itu).
+2. Tugasmu: cocokkan clue dengan urutan kata yang ada, lalu tulis urutan angka tebakan, contoh: `[2 – 4 – 1]`.
+3. Perhatikan clue lawan yang sudah terbuka di kotak clue 1–4.  
+   Dari situ kamu bisa membaca pola dan menebak kode lawan di ronde-ronde berikutnya.
+4. Jika waktu habis, sistem akan otomatis mengirim jawaban (kalau kosong ya tetap kosong).
 
 ---
 
-## 🏆 Kondisi Menang
-- **Menang**: Tim pertama yang mendapat **2 poin positif**.  
-- **Kalah**: Tim yang mendapat **minus 2 poin**.
+## 🏆 Tujuan Permainan
+
+- Tim harus menebak **kode sendiri dengan benar** agar tidak kehilangan poin.  
+  - Salah menebak kode sendiri → **–1 poin**.  
+- Tim bisa mendapatkan poin dengan **menebak kode lawan dengan tepat** → **+1 poin**.  
+- Kondisi akhir permainan:
+  - ❌ Tim **gugur** jika skornya turun sampai **–2**.  
+  - ✅ Tim **menang** jika berhasil mencapai **+2**, atau jika semua lawan sudah gugur.  
 
 ---
 
-## 📌 Ringkasan Cepat
-- Tebak kode tim sendiri dengan benar → aman.  
-- Salah tebak kode sendiri → dapat Miscommunication.  
-- Berhasil tebak kode lawan → dapat Intercept.  
-- 2× Intercept = Menang.  
-- 2× Miscommunication = Kalah.  
+## 💡 Ringkasan Cepat
 
----
-
-## Selamat bermain **Decrypto**!
-
+Jangan salah tebak kode tim sendiri,  
+tebak kode lawan sebanyak mungkin.  
+Skor **–2 = gugur**, skor **+2 = menang**.

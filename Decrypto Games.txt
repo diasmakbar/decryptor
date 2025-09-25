@@ -1,0 +1,24 @@
+Decrypto Games
+
+Game ini dimainkan oleh 2 tim atau lebih. Setiap tim punya 4 kata rahasia yang ditandai angka 1 sampai 4.
+Di setiap ronde, satu tim akan menjadi Host yang dapat kode rahasia (urutan 3 angka). Tugas mereka adalah memberi clue, lalu semua tim mencoba menebak kode itu.
+
+Peran Clue Speakers (Pemberi Clue):
+1. Kamu akan melihat 4 kata rahasia timmu (dengan nomor 1–4).
+2. Jika giliran tim kamu, kamu sebagai pemberi clue menekan tombol Generate Code dan sistem memberi kode 3 angka, misalnya [2 – 4 – 1].
+3. Buat clue (kata atau frasa singkat) untuk tiap angka sesuai urutan.
+4. Clue harus membantu Hunter timmu menebak, tapi jangan terlalu jelas, karena lawan juga mengamati pola clue.
+5. Kamu menekan tombol Start Timer untuk membatasi diskusi tim lawan.
+6. Setelah ronde selesai, klik "Ready for Next Round", berlaku apabila giliran tim kamu ataupun tim lawan.
+
+Peran Clue Hunters (Penebak Clue):
+1. Kamu akan menerima clue dari Clue Speakers (3 clue sesuai urutan kode ronde itu).
+2. Tugasmu: cocokkan clue dengan urutan kata yang ada, lalu tulis urutan angka tebakan (misalnya [2 – 4 – 1]).
+3. Perhatikan clue lawan yang sudah terbuka di kotak clue 1–4. Dari situ kamu bisa membaca pola dan menebak kode lawan di ronde-ronde berikutnya.
+4. Kalau waktu habis, sistem otomatis kirim jawaban (kalau kosong ya tetap kosong).
+
+Tujuan Permainan:
+- Tim kamu harus bisa menebak kode sendiri dengan benar, agar tim tidak kehilangan poin (-1) kalau salah menebak kode sendiri.
+- Sambil itu, cobalah membaca pola tim lawan supaya bisa menebak kode mereka untuk mendapatkan poin (+1).
+- Tim akan kalah kalau mendapat minus 2 poin (-2)
+- Tim akan menang kalau mendapat 2 poin (+2) atau semua lawan gugur.
