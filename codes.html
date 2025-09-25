@@ -132,6 +132,15 @@
       await update(teamRef(gameId, myTeam), { ready: true });
     });
 
+    // listen ready states
+    onValue(teamsRef(gameId), async (snap) => {
+      const teamsObj = snap.val() || {};
+      renderReadyStatus(readyState, teamsObj);
+      const teamCount = Object.values(teamsObj).length;
+      const allReady = teamCount >= 2 && Object.values(teamsObj).every(t => t.ready);
+      if (allReady) await advanceRoundAndResetReady(gameId, currentRound + 1, teamsObj);
+    });
+
     function updateRoleUI() {
       const host = getHostTeam(teamOrder, currentRound);
       const isHost = host && myTeam === host;
