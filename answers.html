@@ -44,13 +44,8 @@
 <body>
   <h1 id="hdr">Round</h1>
 
-  <!-- Kotak clue hasil jawaban tim lawan (ditaruh di posisi kode yang benar) -->
-  <div id="clueGrid" class="clueGrid" aria-live="polite">
-    <div class="clueBox"><b>1</b><div class="clueEmpty">—</div></div>
-    <div class="clueBox"><b>2</b><div class="clueEmpty">—</div></div>
-    <div class="clueBox"><b>3</b><div class="clueEmpty">—</div></div>
-    <div class="clueBox"><b>4</b><div class="clueEmpty">—</div></div>
-  </div>
+  <!-- Kotak clue hasil jawaban tim lawan -->
+  <div id="clueGrid" class="clueGrid" aria-live="polite"></div>
 
   <div class="rowCenter">
     <div id="timer">01:00</div>
@@ -81,8 +76,8 @@
     import { onValue, update, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
-      currentRoundRef, teamRef, roundRef, gameRef,
-      getHostTeam, getOtherTeam, playerRef
+      currentRoundRef, teamRef, roundRef, roundsRef, gameRef,
+      getHostTeam, playerRef
     } from "./game-utils.js";
     import { maybeScoreCurrentRound } from "./scoring.js";
 
@@ -99,26 +94,35 @@
     const scoreBox = document.getElementById("scoreBox");
     const timerEl = document.getElementById("timer");
 
-    // Gate by role (harus hunter)
+    // role check
     const pSnap = await get(playerRef(gameId, user));
     if (!pSnap.exists() || pSnap.val()?.role !== "hunter" || pSnap.val()?.team !== team) {
       location.replace(`index.html`);
     }
 
-    let currentRound = 1;
-    let roundUnsub = null;
-    let totalTeams = 0;
-    let teamNames = [];
-    let submitted = false;
-    let timerStop = null;
+    // inisialisasi grid 1–4
+    function initClueGrid() {
+      clueGrid.innerHTML = [1,2,3,4].map(n => `
+        <div class="clueBox" data-slot="${n}">
+          <b>${n}</b>
+          <div class="clueContent"><span class="clueEmpty">—</span></div>
+        </div>
+      `).join("");
+    }
+    initClueGrid();
 
-    // scoreboard + totalTeams
+    let currentRound = 1;
+    let timerStop = null;
+    let submitted = false;
+    const processedRounds = new Set();
+    let teamNames = [];
+
+    // scoreboard
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const game = snap.val();
       const teams = game.teams || {};
       teamNames = Object.keys(teams);
-      totalTeams = teamNames.length;
       scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
         `${t}: ${v?.score ?? 0}${v?.eliminated ? " ❌" : ""}`
       ).join(" | ")}`;
@@ -128,7 +132,7 @@
       }
     });
 
-    // watch currentRound
+    // currentRound
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const newRound = snap.val();
@@ -136,43 +140,31 @@
         currentRound = newRound;
         hdr.textContent = `Round ${currentRound}`;
         resetFormUI();
-        resetClueGrid();
         submitted = false;
         if (timerStop) { clearInterval(timerStop); timerStop = null; timerEl.textContent = "01:00"; }
       }
-      bindThisRoundWatcher(currentRound);
     });
 
-    function bindThisRoundWatcher(round) {
-      if (roundUnsub) roundUnsub();
-      roundUnsub = onValue(roundRef(gameId, round), (snap) => {
-        if (!snap.exists()) return;
-        const r = snap.val() || {};
-        const already = Object.prototype.hasOwnProperty.call(r.guesses || {}, team); // treat [] as submitted
-        const guessesCount = Object.keys(r.guesses || {}).length;
+    // listener semua rounds (untuk clue grid + history)
+    onValue(roundsRef(gameId), (snap) => {
+      const rounds = snap.val() || {};
+      for (const [rnum, r] of Object.entries(rounds)) {
+        const key = `${rnum}:${team}`;
+        if (processedRounds.has(key)) continue;
 
-        submitBtn.disabled = !!already;
-
-        // TIMER: start when timerStart exists
-        if (r.timerStart && !timerStop && !already) startCountdown(r.timerStart);
-
-        if (r.revealed) {
-          const host = getHostTeam(teamNames, currentRound);
-          answerStatus.textContent = "";
-          renderHistory(r, host);
-          // Setelah masuk history → reset input
-          resetFormUI();
-        } else {
-          if (already) {
-            answerStatus.textContent = `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
-          } else {
-            answerStatus.textContent = "";
+        if (r?.revealed) {
+          renderHistory(r, rnum);
+          if (Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3) {
+            appendCluesFromRound(r, team);
           }
+          processedRounds.add(key);
+        } else {
+          // timer
+          if (r.timerStart && !submitted) startCountdown(r.timerStart);
         }
-      });
-    }
+      }
+    });
 
-    // Submit jawaban (manual)
     submitBtn.addEventListener("click", () => doSubmit(false));
 
     async function doSubmit(isAuto) {
@@ -185,48 +177,56 @@
       const n3 = document.getElementById("num3").value.trim();
 
       let updates = {};
-      // Clues boleh kosong saat auto-timeout
-      if (c1 || c2 || c3) updates[`clues/${team}`] = [c1, c2, c3];
+      if (c1 || c2 || c3) updates[`clues/${team}`] = [c1,c2,c3];
 
       let guesses = [];
-      const allNums = [n1,n2,n3].every(x => x && Number.isInteger(Number(x)) && Number(x)>=1 && Number(x)<=4);
-      if (allNums) guesses = [Number(n1), Number(n2), Number(n3)];
-      // Saat auto-timeout & angka belum lengkap → set guesses=[] agar scoring tidak macet
+      const nums = [n1,n2,n3];
+      if (nums.every(x => x && !isNaN(Number(x)))) {
+        guesses = nums.map(Number);
+      }
       updates[`guesses/${team}`] = guesses;
 
       await update(roundRef(gameId, currentRound), updates);
       submitted = true;
       submitBtn.disabled = true;
-      answerStatus.textContent = isAuto ? "⏱️ Waktu habis. Jawaban terkirim otomatis." : `✅ Jawaban terkirim, tunggu tim lain...`;
+      answerStatus.textContent = isAuto ? "⏱️ Waktu habis. Jawaban terkirim otomatis." : "✅ Jawaban terkirim.";
       maybeScoreCurrentRound(gameId);
       if (timerStop) { clearInterval(timerStop); timerStop = null; }
     }
 
     function resetFormUI() {
-      ["clue1","clue2","clue3","num1","num2","num3"].forEach(id => { const el=document.getElementById(id); if (el) el.value = ""; });
+      ["clue1","clue2","clue3","num1","num2","num3"].forEach(id => { const el=document.getElementById(id); if (el) el.value=""; });
       submitBtn.disabled = false;
       answerStatus.textContent = "";
     }
-    function resetClueGrid() {
-      clueGrid.innerHTML =
-        `<div class="clueBox"><b>1</b><div class="clueEmpty">—</div></div>
-         <div class="clueBox"><b>2</b><div class="clueEmpty">—</div></div>
-         <div class="clueBox"><b>3</b><div class="clueEmpty">—</div></div>
-         <div class="clueBox"><b>4</b><div class="clueEmpty">—</div></div>`;
+
+    function appendCluesFromRound(r, team) {
+      if (!Array.isArray(r.code) || r.code.length !== 3) return;
+      const clues = r.clues?.[team] || [];
+      const code  = r.code;
+      for (let i=0;i<3;i++) {
+        const slotNum = code[i];
+        const clueText = clues[i] || "";
+        if (!clueText) continue;
+        const box = clueGrid.querySelector(`.clueBox[data-slot="${slotNum}"] .clueContent`);
+        if (!box) continue;
+        const ph = box.querySelector(".clueEmpty");
+        if (ph) box.innerHTML = "";
+        box.insertAdjacentHTML("beforeend", `<div>${clueText}</div>`);
+      }
     }
 
-    function renderHistory(r, host) {
-      // Prepend card (history append ke atas)
+    function renderHistory(r, rnum) {
       const teamCount = teamNames.length;
-      const isBonus = (currentRound < teamCount + 1);
+      const isBonus = (Number(rnum) < teamCount + 1);
       const codeTxt = Array.isArray(r.code) ? r.code.join(" - ") : "-";
       const clues = r.clues?.[team] ? r.clues[team].join(" | ") : "-";
       const guesses = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3
-                      ? r.guesses[team].join(" - ") : (r.guesses?.[team] ? "-" : "-");
+                      ? r.guesses[team].join(" - ") : "-";
 
       const card =
         `<div class="roundCard ${isBonus ? "bonus": ""}">
-          <div class="roundHeader">Round ${currentRound} - Giliran Team ${host} kasih clue!</div>
+          <div class="roundHeader">Round ${rnum}</div>
           <div class="teamBox">
             <b>${team}</b>
             Clues: ${clues}<br/>
@@ -234,26 +234,11 @@
             Answers: ${codeTxt}
           </div>
         </div>`;
-
       historyDiv.insertAdjacentHTML("afterbegin", card);
-
-      // 4 kotak clue hasil jawaban tim lawan:
-      // tampilkan hanya jika tim kita mengirim 3 angka (bukan kosong), agar sesuai rule "tanpa angka → tidak menambah kotak".
-      if (Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3 && Array.isArray(r.code)) {
-        const c = r.clues?.[team] || [];
-        const code = r.code; // misal [1,2,3]
-        // letakkan clue1 ke slot code[0], clue2 ke slot code[1], clue3 ke slot code[2]
-        const slots = ["","","",""];
-        for (let i=0;i<3;i++){ const pos = code[i]; slots[pos-1] = (c[i]||""); }
-        clueGrid.innerHTML = slots.map((text,idx)=>(
-          `<div class="clueBox"><b>${idx+1}</b><div>${text ? text : '<span class="clueEmpty">—</span>'}</div></div>`
-        )).join("");
-      }
     }
 
-    // Countdown 60 detik sejak timerStart
     function startCountdown(timerStartMs) {
-      const deadline = Number(timerStartMs) + 60_000; // 60 detik
+      const deadline = Number(timerStartMs) + 60_000;
       timerStop = setInterval(() => {
         const now = Date.now();
         const remain = Math.max(0, Math.floor((deadline - now)/1000));
