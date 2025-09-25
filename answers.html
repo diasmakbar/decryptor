@@ -8,66 +8,50 @@
   body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
   h1{margin:10px 0}
 
-  /* Kotak angka 1..4 untuk clue lawan */
-  .clueGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:800px;margin:0 auto 10px}
+  .wordGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:800px;margin:0 auto}
+  .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:14px;border-radius:10px;text-align:center}
+
+  .clueGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:800px;margin:0 auto}
   .clueBox{background:#0b3fad;border:1px solid #154bc2;border-radius:10px;padding:12px}
   .clueBox b{display:block;font-size:18px;margin-bottom:4px}
   .clueEmpty{opacity:.6}
 
-  /* Input Clue + Angka */
-  .inputs{margin:16px auto;max-width:600px;display:grid;grid-template-columns: 2fr 1fr;gap:8px 12px}
-  .inputs input{padding:10px;border-radius:8px;border:1px solid #444;font-size:1rem;box-sizing:border-box}
-  .inputs input[type="text"]{text-align:left}
-  .inputs input[type="number"]{text-align:center}
-  @media (max-width:480px){.inputs{grid-template-columns:minmax(120px,2fr) minmax(50px,1fr)}}
+  .inputs{margin:16px auto;max-width:400px;display:flex;flex-direction:column;gap:8px}
+  .inputs .row{display:flex;gap:8px}
+  .inputs input{flex:1;padding:10px;border-radius:8px;border:1px solid #444;font-size:1rem}
 
-  /* Tombol */
-  button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
+  button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px;cursor:pointer}
   #submitBtn{background:#22c55e;color:#111}
 
-  /* Timer & Scoreboard */
   .rowCenter{display:flex;gap:14px;justify-content:center;align-items:center;margin-top:6px}
   #timer{font-weight:800;font-size:20px;letter-spacing:.1em}
 
   .status{opacity:.9;margin-top:10px}
   .scoreBoard{background:#222;padding:10px;border-radius:10px;max-width:520px;margin:14px auto}
-
-  /* History */
   .history{max-width:900px;margin:18px auto;text-align:left}
   .roundCard{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:16px;margin:18px 0}
   .roundCard.bonus{border-color:#10b981;box-shadow:0 0 0 1px #10b981 inset}
-  .roundHeader{font-weight:700;margin-bottom:12px;text-align:center}
-  .teamBox{background:#111;padding:12px;border-radius:8px}
-  .teamBox b{display:block;margin-bottom:6px}
   </style>
 </head>
 <body>
   <h1 id="hdr">Round</h1>
 
-  <!-- Kotak clue hasil jawaban tim lawan -->
-  <div id="clueGrid" class="clueGrid" aria-live="polite"></div>
+  <h2>Kata Tim Kamu</h2>
+  <div id="myWordBox">Loading kata…</div>
 
-  <div class="rowCenter">
-    <div id="timer">01:00</div>
-  </div>
+  <div class="rowCenter"><div id="timer">01:00</div></div>
 
   <div class="inputs">
-    <div class="pair">
-      <input type="text" id="clue1" placeholder="Clue 1"/>
-      <input type="number" id="num1" min="1" max="4" placeholder="#"/>
-    </div>
-    <div class="pair">
-      <input type="text" id="clue2" placeholder="Clue 2"/>
-      <input type="number" id="num2" min="1" max="4" placeholder="#"/>
-    </div>
-    <div class="pair">
-      <input type="text" id="clue3" placeholder="Clue 3"/>
-      <input type="number" id="num3" min="1" max="4" placeholder="#"/>
-    </div>
+    <div class="row"><input type="text" id="clue1" placeholder="Clue 1"/><input type="number" id="num1" min="1" max="4" placeholder="#"/></div>
+    <div class="row"><input type="text" id="clue2" placeholder="Clue 2"/><input type="number" id="num2" min="1" max="4" placeholder="#"/></div>
+    <div class="row"><input type="text" id="clue3" placeholder="Clue 3"/><input type="number" id="num3" min="1" max="4" placeholder="#"/></div>
   </div>
 
   <button id="submitBtn">Submit</button>
   <div id="answerStatus" class="status"></div>
+
+  <h2>Clue Lawan</h2>
+  <div id="clueGrid" class="clueGrid"></div>
 
   <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
   <div id="history" class="history"></div>
@@ -76,8 +60,8 @@
     import { onValue, update, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
-      currentRoundRef, teamRef, roundRef, roundsRef, gameRef,
-      getHostTeam, playerRef
+      currentRoundRef, teamRef, roundsRef, roundRef, gameRef,
+      playerRef
     } from "./game-utils.js";
     import { maybeScoreCurrentRound } from "./scoring.js";
 
@@ -87,6 +71,7 @@
     const user = params.get("user");
 
     const hdr = document.getElementById("hdr");
+    const myWordBox = document.getElementById("myWordBox");
     const clueGrid = document.getElementById("clueGrid");
     const submitBtn = document.getElementById("submitBtn");
     const answerStatus = document.getElementById("answerStatus");
@@ -96,11 +81,16 @@
 
     // role check
     const pSnap = await get(playerRef(gameId, user));
-    if (!pSnap.exists() || pSnap.val()?.role !== "hunter" || pSnap.val()?.team !== team) {
-      location.replace(`index.html`);
+    if (!pSnap.exists() || pSnap.val()?.role !== "hunter") location.replace(`index.html`);
+
+    // tampilkan kata tim sendiri
+    const wSnap = await get(teamRef(gameId, team));
+    if (wSnap.exists()) {
+      let words = wSnap.val().words || [];
+      if (!Array.isArray(words)) words = Object.values(words);
+      myWordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
     }
 
-    // inisialisasi grid 1–4
     function initClueGrid() {
       clueGrid.innerHTML = [1,2,3,4].map(n => `
         <div class="clueBox" data-slot="${n}">
@@ -112,8 +102,8 @@
     initClueGrid();
 
     let currentRound = 1;
-    let timerStop = null;
     let submitted = false;
+    let timerStop = null;
     const processedRounds = new Set();
     let teamNames = [];
 
@@ -124,34 +114,26 @@
       const teams = game.teams || {};
       teamNames = Object.keys(teams);
       scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
-        `${t}: ${v?.score ?? 0}${v?.eliminated ? " ❌" : ""}`
-      ).join(" | ")}`;
-      if (teams[team]?.eliminated) {
-        submitBtn.disabled = true;
-        answerStatus.textContent = "❌ Tim kamu sudah gugur!";
-      }
+        `${t}: ${v?.score ?? 0}`).join(" | ")}`;
     });
 
-    // currentRound
+    // round & countdown
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const newRound = snap.val();
       if (newRound !== currentRound) {
         currentRound = newRound;
         hdr.textContent = `Round ${currentRound}`;
-        resetFormUI();
         submitted = false;
         if (timerStop) { clearInterval(timerStop); timerStop = null; timerEl.textContent = "01:00"; }
       }
     });
 
-    // listener semua rounds (untuk clue grid + history)
     onValue(roundsRef(gameId), (snap) => {
       const rounds = snap.val() || {};
       for (const [rnum, r] of Object.entries(rounds)) {
         const key = `${rnum}:${team}`;
         if (processedRounds.has(key)) continue;
-
         if (r?.revealed) {
           renderHistory(r, rnum);
           if (Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3) {
@@ -159,7 +141,6 @@
           }
           processedRounds.add(key);
         } else {
-          // timer
           if (r.timerStart && !submitted) startCountdown(r.timerStart);
         }
       }
@@ -181,23 +162,15 @@
 
       let guesses = [];
       const nums = [n1,n2,n3];
-      if (nums.every(x => x && !isNaN(Number(x)))) {
-        guesses = nums.map(Number);
-      }
+      if (nums.every(x => x && !isNaN(Number(x)))) guesses = nums.map(Number);
       updates[`guesses/${team}`] = guesses;
 
       await update(roundRef(gameId, currentRound), updates);
       submitted = true;
       submitBtn.disabled = true;
-      answerStatus.textContent = isAuto ? "⏱️ Waktu habis. Jawaban terkirim otomatis." : "✅ Jawaban terkirim.";
+      answerStatus.textContent = isAuto ? "⏱️ Auto submit" : "✅ Jawaban terkirim";
       maybeScoreCurrentRound(gameId);
       if (timerStop) { clearInterval(timerStop); timerStop = null; }
-    }
-
-    function resetFormUI() {
-      ["clue1","clue2","clue3","num1","num2","num3"].forEach(id => { const el=document.getElementById(id); if (el) el.value=""; });
-      submitBtn.disabled = false;
-      answerStatus.textContent = "";
     }
 
     function appendCluesFromRound(r, team) {
@@ -223,22 +196,17 @@
       const clues = r.clues?.[team] ? r.clues[team].join(" | ") : "-";
       const guesses = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3
                       ? r.guesses[team].join(" - ") : "-";
-
       const card =
         `<div class="roundCard ${isBonus ? "bonus": ""}">
-          <div class="roundHeader">Round ${rnum}</div>
-          <div class="teamBox">
-            <b>${team}</b>
-            Clues: ${clues}<br/>
-            Guesses: ${guesses}<br/>
-            Answers: ${codeTxt}
-          </div>
+          <div>Round ${rnum}</div>
+          <div>${team} → Clues: ${clues} | Guesses: ${guesses} | Answers: ${codeTxt}</div>
         </div>`;
       historyDiv.insertAdjacentHTML("afterbegin", card);
     }
 
-    function startCountdown(timerStartMs) {
-      const deadline = Number(timerStartMs) + 60_000;
+    function startCountdown(val) {
+      const startMs = typeof val === "number" ? val : Number(val);
+      const deadline = startMs + 60_000;
       timerStop = setInterval(() => {
         const now = Date.now();
         const remain = Math.max(0, Math.floor((deadline - now)/1000));

@@ -7,11 +7,10 @@
   <style>
     body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
     h1{margin:10px 0}
-    .card{background:#0b3fad;border:1px solid #154bc2;border-radius:12px;padding:14px;margin:12px auto;max-width:520px}
     .wordGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:800px;margin:0 auto}
     .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:14px;border-radius:10px;text-align:center}
     @media (max-width:600px){.wordGrid{grid-template-columns:repeat(2,1fr)}}
-    button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
+    button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px;cursor:pointer}
     #genBtn{background:#22c55e;color:#111}
     #timerBtn{background:#eab308;color:#111}
     #readyBtn{background:#3b82f6;color:#fff}
@@ -41,7 +40,7 @@
       currentRoundRef, teamsRef, codeRef, teamOrderRef, teamRef, gameRef,
       getHostTeam, generateUniqueCode,
       setBtnEnabled, renderReadyStatus, advanceRoundAndResetReady,
-      mountWinnerBanner, playerRef, playersRef
+      mountWinnerBanner, playerRef
     } from "./game-utils.js";
     import { maybeScoreCurrentRound } from "./scoring.js";
 
@@ -64,65 +63,47 @@
     const readyState = document.getElementById("readyState");
     const scoreBox = document.getElementById("scoreBox");
 
-    // Gate by role (harus speaker)
+    // gate role
     const pSnap = await get(playerRef(gameId, user));
-    if (!pSnap.exists() || pSnap.val()?.role !== "speaker" || pSnap.val()?.team !== myTeam) {
-      location.replace(`index.html`);
-    }
+    if (!pSnap.exists() || pSnap.val()?.role !== "speaker") location.replace(`index.html`);
 
     // tampilkan kata tim
     const wordBox = document.getElementById("wordBox");
     const wSnap = await get(teamRef(gameId, myTeam));
     if (wSnap.exists()) {
-      const { words = [] } = wSnap.val() || {};
+      let words = wSnap.val().words || [];
+      if (!Array.isArray(words)) words = Object.values(words);
       wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
-    } else {
-      wordBox.textContent = "Kata tim tidak ditemukan.";
     }
 
-    // scoreboard live
+    // scoreboard
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
-      const game = snap.val();
-      const teams = game.teams || {};
-      const teamNames = Object.keys(teams);
-      const totalTeams = teamNames.length;
+      const teams = snap.val().teams || {};
       scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
-        `${t}: ${v?.score ?? 0}${v?.eliminated ? " ❌" : ""}`
-      ).join(" | ")}`;
-      if (teams[myTeam]?.eliminated) {
-        genBtn.disabled = true; timerBtn.disabled = true; readyBtn.disabled = true;
-        readyState.textContent = "❌ Tim kamu sudah gugur!";
-      }
+        `${t}: ${v?.score ?? 0}`).join(" | ")}`;
     });
 
-    // listen teamOrder
+    // teamOrder
     onValue(teamOrderRef(gameId), (snap) => {
       teamOrder = snap.val() || teamOrder;
       updateRoleUI();
     });
 
-    // listener code per round
     function attachCodeListener(round) {
-      if (codeUnsub) codeUnsub(); // unsubscribe lama
+      if (codeUnsub) codeUnsub();
       codeUnsub = onValue(codeRef(gameId, round), (snap) => {
         const host = getHostTeam(teamOrder, round);
         const isHost = host && myTeam === host;
         const hasCode = snap.exists();
-
-        if (isHost && hasCode) {
-          codeBox.textContent = snap.val().join(" - ");
-        } else {
-          codeBox.textContent = "— — —";
-        }
-
-        setBtnEnabled(timerBtn, isHost && hasCode);   // Timer aktif setelah code ada
-        setBtnEnabled(readyBtn, hasCode);             // Ready tetap seperti semula (untuk advance)
+        if (isHost && hasCode) codeBox.textContent = snap.val().join(" - ");
+        else codeBox.textContent = "— — —";
+        setBtnEnabled(timerBtn, isHost && hasCode);
+        setBtnEnabled(readyBtn, hasCode);
         maybeScoreCurrentRound(gameId);
       });
     }
 
-    // listen currentRound
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       currentRound = snap.val();
@@ -133,25 +114,6 @@
       attachCodeListener(currentRound);
     });
 
-    // listen ready states
-    onValue(teamsRef(gameId), async (snap) => {
-      const teamsObj = snap.val() || {};
-      renderReadyStatus(readyState, teamsObj);
-      const teamCount = Object.values(teamsObj).length;
-      const allReady = teamCount >= 2 && Object.values(teamsObj).every(t => t.ready);
-      if (allReady) await advanceRoundAndResetReady(gameId, currentRound + 1, teamsObj);
-    });
-
-    function updateRoleUI() {
-      const host = getHostTeam(teamOrder, currentRound);
-      const isHost = host && myTeam === host;
-      // hanya host yang bisa generate
-      get(codeRef(gameId, currentRound)).then(snap => {
-        const hasCode = snap.exists();
-        setBtnEnabled(genBtn, isHost && !hasCode);
-      });
-    }
-
     genBtn.addEventListener("click", async () => {
       const code = generateUniqueCode();
       await set(codeRef(gameId, currentRound), code);
@@ -159,15 +121,25 @@
       setBtnEnabled(timerBtn, true);
     });
 
-    // NEW: start timer → tulis server timestamp
     timerBtn.addEventListener("click", async () => {
-      await update(ref(db, `games/decrypto/${gameId}/rounds/${currentRound}`), { timerStart: serverTimestamp() });
+      await update(ref(db, `games/decrypto/${gameId}/rounds/${currentRound}`), {
+        timerStart: Date.now()
+      });
       setBtnEnabled(timerBtn, false);
     });
 
     readyBtn.addEventListener("click", async () => {
       await update(teamRef(gameId, myTeam), { ready: true });
     });
+
+    function updateRoleUI() {
+      const host = getHostTeam(teamOrder, currentRound);
+      const isHost = host && myTeam === host;
+      get(codeRef(gameId, currentRound)).then(snap => {
+        const hasCode = snap.exists();
+        setBtnEnabled(genBtn, isHost && !hasCode);
+      });
+    }
   </script>
 </body>
 </html>
