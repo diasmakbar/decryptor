@@ -1,0 +1,61 @@
+{
+  "games": {
+    "decrypto": {
+      "1234": {
+        "currentRound": 1,
+        "players": {
+          "x1": {
+            "role": "hunter",
+            "team": "asdf"
+          },
+          "x2": {
+            "role": "speaker",
+            "team": "asdf"
+          },
+          "z1": {
+            "role": "speaker",
+            "team": "qwer"
+          },
+          "z2": {
+            "role": "hunter",
+            "team": "qwer"
+          }
+        },
+        "teamOrder": [
+          "qwer",
+          "asdf"
+        ],
+        "teams": {
+          "asdf": {
+            "ready": false,
+            "roles": {
+              "hunter": "x1",
+              "speaker": "x2"
+            },
+            "score": 0,
+            "words": [
+              "Es krim",
+              "Bakso",
+              "Bunga",
+              "Ikan"
+            ]
+          },
+          "qwer": {
+            "ready": false,
+            "roles": {
+              "hunter": "z2",
+              "speaker": "z1"
+            },
+            "score": 0,
+            "words": [
+              "Kantor",
+              "Kopi",
+              "Bendera",
+              "Susu"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

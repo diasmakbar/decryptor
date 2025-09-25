@@ -22,7 +22,7 @@
 <body>
   <h1 id="hdr">Round</h1>
 
-  <div id="wordBox" class="card">Loading kata…</div>
+  <div id="wordBox">Loading kata…</div>
 
   <div id="code">— — —</div>
   <div>
@@ -34,7 +34,7 @@
   <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
 
   <script type="module">
-    import { onValue, set, get, update, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { onValue, set, get, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
       currentRoundRef, teamsRef, codeRef, teamOrderRef, teamRef, gameRef,
@@ -134,15 +134,15 @@
 
     // listen ready states
     onValue(teamsRef(gameId), async (snap) => {
-    const teamsObj = snap.val() || {};
-    renderReadyStatus(readyState, teamsObj);
+      const teamsObj = snap.val() || {};
+      renderReadyStatus(readyState, teamsObj);
 
-    const teamCount = Object.values(teamsObj).length;
-    const allReady = teamCount >= 2 && Object.values(teamsObj).every(t => t.ready);
+      const teamCount = Object.values(teamsObj).length;
+      const allReady = teamCount >= 2 && Object.values(teamsObj).every(t => t.ready);
 
-    if (allReady) {
+      if (allReady) {
         await advanceRoundAndResetReady(gameId, currentRound + 1, teamsObj);
-    }
+      }
     });
 
     function updateRoleUI() {

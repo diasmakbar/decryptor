@@ -107,6 +107,23 @@
     const processedRounds = new Set();
     let teamNames = [];
 
+    function resetFormUI() {
+      ["clue1","clue2","clue3","num1","num2","num3"].forEach(id=>{
+        const el=document.getElementById(id);
+        if (el) { el.value=""; el.disabled=false; }
+      });
+      submitBtn.disabled = false;
+      answerStatus.textContent = "";
+    }
+
+    function lockInputs() {
+      ["clue1","clue2","clue3","num1","num2","num3"].forEach(id=>{
+        const el=document.getElementById(id);
+        if (el) el.disabled=true;
+      });
+      submitBtn.disabled = true;
+    }
+
     // scoreboard
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
@@ -125,6 +142,7 @@
         currentRound = newRound;
         hdr.textContent = `Round ${currentRound}`;
         submitted = false;
+        resetFormUI();
         if (timerStop) { clearInterval(timerStop); timerStop = null; timerEl.textContent = "01:00"; }
       }
     });
@@ -142,8 +160,9 @@
           processedRounds.add(key);
         } else {
           if (r.timerStart && !submitted && !timerStop) {
-            startCountdown(Number(r.timerStart));
-            }
+            const startVal = parseInt(r.timerStart,10);
+            if (!isNaN(startVal)) startCountdown(startVal);
+          }
         }
       }
     });
@@ -169,8 +188,8 @@
 
       await update(roundRef(gameId, currentRound), updates);
       submitted = true;
-      submitBtn.disabled = true;
       answerStatus.textContent = isAuto ? "⏱️ Auto submit" : "✅ Jawaban terkirim";
+      lockInputs();
       maybeScoreCurrentRound(gameId);
       if (timerStop) { clearInterval(timerStop); timerStop = null; }
     }
@@ -206,12 +225,10 @@
       historyDiv.insertAdjacentHTML("afterbegin", card);
     }
 
-    function startCountdown(val) {
-      const startMs = typeof val === "number" ? val : Number(val);
-      const deadline = startMs + 60_000;
+    function startCountdown(startVal) {
+      const deadline = Number(startVal) + 60_000;
       timerStop = setInterval(() => {
-        const now = Date.now();
-        const remain = Math.max(0, Math.floor((deadline - now)/1000));
+        const remain = Math.max(0, Math.floor((deadline - Date.now())/1000));
         const m = String(Math.floor(remain/60)).padStart(2,"0");
         const s = String(remain%60).padStart(2,"0");
         timerEl.textContent = `${m}:${s}`;
