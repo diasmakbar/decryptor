@@ -10,32 +10,37 @@
     input,button{padding:12px;font-size:16px;border-radius:8px;margin:6px 0;width:90%;max-width:340px;border:1px solid #444}
     button{background:#3b82f6;color:#fff;border:none;cursor:pointer}
     button:hover{background:#2563eb}
-    /* Popup */
-    .overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);display:none;justify-content:center;align-items:center;z-index:1000}
-    .popup{background:#222;padding:20px;border-radius:12px;text-align:center;max-width:320px}
-    .popup h2{margin-bottom:16px}
-    .popup button{margin:6px 0;width:100%}
-    .cancelBtn{background:#ef4444}
-    .cancelBtn:hover{background:#b91c1c}
+    /* Modal */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
+    .modal{background:#1f2937;border:1px solid #374151;border-radius:14px;max-width:420px;width:90%;padding:18px;text-align:center}
+    .modal h2{margin:6px 0 12px}
+    .modal .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+    .modal button{width:auto;min-width:160px}
+    .muted{opacity:.8;font-size:.9rem}
   </style>
 </head>
 <body>
-  <h1>Decryptor Game - 🔑 Masuk</h1>
-  <input id="gameId" placeholder="Game ID (4 digit)"/>
+  <h1>Decrypto Game - 🔑 Masuk Game Room</h1>
+  <input id="gameId" placeholder="Game ID (4 digit)" inputmode="numeric" maxlength="4"/>
   <br/>
-  <input id="teamName" placeholder="Nama Tim"/>
+  <input id="teamName" placeholder="Nama Tim (case-insensitive)"/>
   <br/>
-  <input id="username" placeholder="Username"/>
+  <input id="username" placeholder="Username (case-insensitive)"/>
   <br/>
   <button id="joinBtn">Join</button>
 
-  <!-- Popup pilih role -->
-  <div class="overlay" id="roleOverlay">
-    <div class="popup">
-      <h2>Pilih peran kamu!</h2>
-      <button id="roleSpeaker">🎤 Clue Speaker</button>
-      <button id="roleHunter">🎯 Clue Hunter</button>
-      <button id="roleCancel" class="cancelBtn">❌ Batal</button>
+  <!-- Modal pilih role -->
+  <div id="roleOverlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Choose your role!</h2>
+      <p class="muted">Player pertama di tim memilih role. Player kedua otomatis mendapat role sisanya.</p>
+      <div class="row">
+        <button id="btnSpeaker">Clue Speakers</button>
+        <button id="btnHunter">Clue Hunters</button>
+      </div>
+      <div style="margin-top:10px">
+        <button id="btnCancel" style="background:#6b7280">Cancel</button>
+      </div>
     </div>
   </div>
 
@@ -43,133 +48,138 @@
     import { ref, get, set, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
 
-    const joinBtn=document.getElementById("joinBtn");
-    const overlay=document.getElementById("roleOverlay");
-    const btnSpeaker=document.getElementById("roleSpeaker");
-    const btnHunter=document.getElementById("roleHunter");
-    const btnCancel=document.getElementById("roleCancel");
+    const $ = (id)=>document.getElementById(id);
+    const overlay = $("roleOverlay");
+    const btnSpeaker = $("btnSpeaker");
+    const btnHunter = $("btnHunter");
+    const btnCancel = $("btnCancel");
 
-    let gameId, team, username, allWords, gamePath, gameRef, snap, game;
+    $("joinBtn").addEventListener("click", start);
 
-    joinBtn.addEventListener("click", start);
+    function lc(s){ return (s||"").trim().toLowerCase(); }
 
     async function start() {
-      gameId=document.getElementById("gameId").value.trim();
-      const teamRaw=(document.getElementById("teamName").value||"").trim();
-      username=(document.getElementById("username").value||"").trim().toLowerCase();
+      const gameId = $("gameId").value.trim();
+      const teamRaw = $("teamName").value.trim();
+      const userRaw = $("username").value.trim();
 
-      if(!/^\d{4}$/.test(gameId)) return alert("Game ID harus 4 digit angka!");
-      if(!teamRaw) return alert("Isi nama tim!");
-      if(!username) return alert("Isi username!");
+      if (!/^\d{4}$/.test(gameId)) return alert("Game ID harus 4 digit angka!");
+      if (!teamRaw) return alert("Isi nama tim!");
+      if (!userRaw) return alert("Isi username!");
 
-      team=teamRaw.toLowerCase();
-      gamePath=`games/decrypto/${gameId}`;
-      gameRef=ref(db,gamePath);
-      snap=await get(gameRef);
+      const team = lc(teamRaw);
+      const user = lc(userRaw);
 
-      // load wordbank
-      const text=await fetch("words.txt").then(r=>r.text());
-      allWords=text.split("\n").map(w=>w.trim()).filter(Boolean);
+      const gamePath = `games/decrypto/${gameId}`;
+      const gref = ref(db, gamePath);
+      const snap = await get(gref);
 
-      const shuffle=a=>{const x=[...a];for(let i=x.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]}return x;};
+      // Muat wordbank
+      const text = await fetch("words.txt").then(r=>r.text());
+      const allWords = text.split("\n").map(w=>w.trim()).filter(Boolean);
+      const shuffle = a => { const x=[...a]; for(let i=x.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]} return x; };
 
-      // case 1: game belum ada → buat baru
-      if(!snap.exists()){
-        const selected=shuffle(allWords).slice(0,4);
-        await set(gameRef,{
-          currentRound:1,
-          winner:null,
-          teamOrder:[team],
-          teams:{[team]:{words:selected,ready:false,score:0,hasGenerator:false}},
-          players:{[username]:{team,role:null}}, // role dipilih via popup
-          rounds:{}
-        });
-        return showRolePopup();
+      // Helper pindah halaman dengan param user
+      function go(page, gameId, team, user) {
+        location.href = `${page}?gameId=${gameId}&team=${encodeURIComponent(team)}&user=${encodeURIComponent(user)}`;
       }
 
-      game=snap.val()||{};
-
-      // case 2: game sudah selesai → reset & buat baru
-      if(game.winner){
-        await remove(gameRef);
-        const selected=shuffle(allWords).slice(0,4);
-        await set(gameRef,{
-          currentRound:1,
-          winner:null,
-          teamOrder:[team],
-          teams:{[team]:{words:selected,ready:false,score:0,hasGenerator:false}},
-          players:{[username]:{team,role:null}},
-          rounds:{}
+      // Jika game belum ada → buat baru & lanjut ke pilih role
+      if (!snap.exists()) {
+        const selected = shuffle(allWords).slice(0,4);
+        await set(gref, {
+          currentRound: 1,
+          winner: null,
+          teamOrder: [team],
+          teams: { [team]: { words: selected, ready: false, score: 0, roles: { speaker: null, hunter: null } } },
+          rounds: {},
+          players: {}
         });
-        return showRolePopup();
+        return showRoleChooser("new");
       }
 
-      // case 3: game sedang berlangsung (round >=2) → tolak
-      if((game.currentRound||1)>=2){
+      const game = snap.val() || {};
+
+      // Jika game selesai → reset dan buat baru
+      if (game.winner) {
+        await remove(gref);
+        const selected = shuffle(allWords).slice(0,4);
+        await set(gref, {
+          currentRound: 1,
+          winner: null,
+          teamOrder: [team],
+          teams: { [team]: { words: selected, ready: false, score: 0, roles: { speaker: null, hunter: null } } },
+          rounds: {},
+          players: {}
+        });
+        return showRoleChooser("new_after_reset");
+      }
+
+      // Jika user sudah pernah join → langsung kembali ke role lama
+      const player = (game.players && game.players[user]) || null;
+      if (player) {
+        const { team: t, role } = player;
+        return go(role === "speaker" ? "codes.html" : "answers.html", gameId, t, user);
+      }
+
+      // Round >= 2 → tolak tim baru (tetap mengikuti rule lama)
+      if ((game.currentRound || 1) >= 2 && !(game.teams||{})[team]) {
         alert("Game sedang berlangsung!");
         return;
       }
 
-      // case 4: round masih 1 → boleh tim baru join
-      const teams=game.teams||{};
-      if(!teams[team]){
-        const used=Object.values(teams).flatMap(t=>t.words||[]);
-        const remaining=allWords.filter(w=>!used.includes(w));
-        if(remaining.length<4) return alert("Kata tersisa tidak cukup.");
-        const selected=shuffle(remaining).slice(0,4);
-        const newOrder=Array.isArray(game.teamOrder)?[...game.teamOrder,team]:[team];
-        await update(ref(db),{
-          [`${gamePath}/teams/${team}`]:{words:selected,ready:false,score:0,hasGenerator:false},
-          [`${gamePath}/teamOrder`]:newOrder,
-          [`${gamePath}/players/${username}`]:{team,role:null}
+      // Pastikan tim ada; kalau belum ada di round 1 → buat tim & tambah ke teamOrder
+      const teams = game.teams || {};
+      if (!teams[team]) {
+        const used = Object.values(teams).flatMap(t => t.words || []);
+        const remaining = allWords.filter(w => !used.includes(w));
+        if (remaining.length < 4) return alert("Kata tersisa tidak cukup.");
+        const selected = shuffle(remaining).slice(0,4);
+        const newOrder = Array.isArray(game.teamOrder) ? [...game.teamOrder, team] : [team];
+        await update(ref(db), {
+          [`${gamePath}/teams/${team}`]: { words: selected, ready: false, score: 0, roles: { speaker:null, hunter:null } },
+          [`${gamePath}/teamOrder`]: newOrder
         });
-        return showRolePopup();
       }
 
-      // case 5: tim sudah ada → join role
-      if(game.players && game.players[username]){
-        const role=game.players[username].role;
-        if(!role) return showRolePopup();
-        return go(role==="code"?"codes.html":"answers.html");
-      }
+      // Ambil ulang state tim setelah mungkin dibuat
+      const teamsNowSnap = await get(gref);
+      const gameNow = teamsNowSnap.val();
+      const roles = (gameNow.teams?.[team]?.roles) || { speaker:null, hunter:null };
 
-      // cek jumlah player dalam tim ini
-      const existingPlayers=Object.values(game.players||{}).filter(p=>p.team===team);
-      if(existingPlayers.length===0){
-        await update(ref(db),{[`${gamePath}/players/${username}`]:{team,role:null}});
-        return showRolePopup();
-      } else if(existingPlayers.length===1){
-        // player kedua → role otomatis
-        const otherRole=existingPlayers[0].role==="code"?"answer":"code";
-        await update(ref(db),{
-          [`${gamePath}/players/${username}`]:{team,role:otherRole},
-          ...(otherRole==="code"?{[`${gamePath}/teams/${team}/hasGenerator`]:true}:{})
-        });
-        return go(otherRole==="code"?"codes.html":"answers.html");
-      } else {
-        alert("Tim sudah penuh!");
+      // Aturan role:
+      // - Kalau dua-duanya kosong → player pertama pilih role
+      // - Kalau salah satu sudah terisi → otomatis assign role yang tersisa
+      // - Kalau dua-duanya terisi → tolak
+      if (!roles.speaker && !roles.hunter) {
+        return showRoleChooser("first_of_team");
+      } else if (roles.speaker && roles.hunter) {
+        alert("Game sedang berlangsung!");
         return;
+      } else {
+        const autoRole = roles.speaker ? "hunter" : "speaker";
+        await update(ref(db), {
+          [`${gamePath}/teams/${team}/roles/${autoRole}`]: user,
+          [`${gamePath}/players/${user}`]: { team, role: autoRole }
+        });
+        return go(autoRole === "speaker" ? "codes.html" : "answers.html", gameId, team, user);
       }
-    }
 
-    // === Popup functions ===
-    function showRolePopup(){
-      overlay.style.display="flex";
-    }
-    btnSpeaker.addEventListener("click",()=>chooseRole("code"));
-    btnHunter.addEventListener("click",()=>chooseRole("answer"));
-    btnCancel.addEventListener("click",()=>{overlay.style.display="none";window.location.href="index.html";});
-
-    async function chooseRole(role){
-      await update(ref(db),{
-        [`${gamePath}/players/${username}/role`]:role,
-        ...(role==="code"?{[`${gamePath}/teams/${team}/hasGenerator`]:true}:{})
-      });
-      go(role==="code"?"codes.html":"answers.html");
-    }
-
-    function go(page){
-      window.location.href=`${page}?gameId=${gameId}&team=${encodeURIComponent(team)}&user=${encodeURIComponent(username)}`;
+      // ==== Helpers ====
+      function showRoleChooser(ctx) {
+        overlay.style.display = "flex";
+        btnSpeaker.onclick = async () => assignRole("speaker");
+        btnHunter.onclick = async () => assignRole("hunter");
+        btnCancel.onclick  = () => { overlay.style.display = "none"; /* kembali ke form */ };
+        async function assignRole(role){
+          overlay.style.display = "none";
+          await update(ref(db), {
+            [`${gamePath}/teams/${team}/roles/${role}`]: user,
+            [`${gamePath}/players/${user}`]: { team, role }
+          });
+          go(role === "speaker" ? "codes.html" : "answers.html", gameId, team, user);
+        }
+      }
     }
   </script>
 </body>

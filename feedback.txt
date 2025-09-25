@@ -1,0 +1,39 @@
+Feedback:
+
+Index html:
+- Input: Game ID, Team (case insensitive, disimpan lowercase), Username.
+- Add username field
+- Case game belum ada buat baru, game selesai reset dan buat baru, game round >= 2 tolak tim baru, round 1 masih open team untuk join (rule 1,2,3,4) tetap sama
+- Perubahan rule game case ke 5, untuk pilih role:
+-- Player pertama tiap tim → pilih role. ini pop up setelah klik join button, ada 3 tombol judul pop upnya "Choose your role!" terus ada 3 pilihan tombol [Clue Speakers] [Clue Hunters] [Cancel] cancel berarti balik lagi ke index html awal.
+-- Player kedua otomatis jadi role satunya.
+-- Player ketiga ditolak. ada pop up "Game sedang berlangsung!"
+-- Username yang sama → selalu balik ke role lama.
+
+
+codes.html (Role Clue Speaker):
+- Bisa generate code.
+- Setelah generate → tombol Timer aktif.
+- Klik Timer → update timerStart ke Firebase.
+
+answers.html (Role Clue Hunter):
+- Ada timer display (01:00) → start countdown kalau timerStart sudah ada.
+- Auto-submit kalau habis waktu.
+- Input lock setelah submit.
+- Reset input setelah jawaban sudah masuk history.
+- Ada 4 kotak clue hasil jawaban tim lawan.
+- History append ke atas, khusus untuk history putaran pertama (kalau 2 team yang join, berarti ronde 1 untuk team b dan ronde 2 untuk team a), dikasih warna hijau karena bonus round (tebakan untuk tim lawan tidak dihitung poin).
+- History harus aman karena role & team diikat ke username, bukan ke session browser.
+- Back-join gak bikin duplikasi player atau hilang data.
+- Player bisa langsung lanjut tanpa pilih role lagi.
+- bikin 4 kotak, headernya angka 1, 2, 3, 4. tapi isi kotaknya ada guess sesuai jawaban saat ronde tim lawan.
+- contoh: 
+-- ronde 1, tim a vs tim b, 
+-- tim a yang kasih clue (generate code hasilnya 1-2-3) roti-gelas-air. orang yang generate code juga bisa aktifin timer setelah dia selesai kasih clue. 
+-- tim b tulis clue roti-gelas-air dan tulis angka 3-2-1, salah karena jawaban benernya 1-2-3. 
+-- ada kotak pertama, headernya angka 1, isinya roti 
+-- ada kotak kedua, headernya angka 2, isinya gelas 
+-- ada kotak ketiga, headernya angka 3, isinya air 
+-- ada kotak keempat, headernya angka 4, isinya kosong karena gaada clue angka 4 
+-- dibawahnya baru ada tab history 
+-- kalau waktu habis dan tim b cuma tulis clue aja tanpa angka, keempat kotak gak bertambah list clue, hanya ada di history tab (seperti sekarang). tidak ada score untuk tim b, kalau tim b salah jawab atau tidak menjawab tim a, memang tidak ada poin tambahan
