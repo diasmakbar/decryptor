@@ -141,7 +141,9 @@
           }
           processedRounds.add(key);
         } else {
-          if (r.timerStart && !submitted) startCountdown(r.timerStart);
+          if (r.timerStart && !submitted && !timerStop) {
+            startCountdown(Number(r.timerStart));
+            }
         }
       }
     });
