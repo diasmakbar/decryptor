@@ -1,47 +1,63 @@
-// game-utils.js (tambahan kecil)
-import {
-  ref, get, set, update, onValue,
-} from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { db } from "./firebase.js";
 
-export const gameRef         = (gameId)         => ref(db, `games/decrypto/${gameId}`);
-export const roundsRef       = (gameId)         => ref(db, `games/decrypto/${gameId}/rounds`);
-export const roundRef        = (gameId, r)      => ref(db, `games/decrypto/${gameId}/rounds/${r}`);
-export const codeRef         = (gameId, r)      => ref(db, `games/decrypto/${gameId}/rounds/${r}/code`);
-export const teamsRef        = (gameId)         => ref(db, `games/decrypto/${gameId}/teams`);
-export const teamRef         = (gameId, team)   => ref(db, `games/decrypto/${gameId}/teams/${team}`);
-export const currentRoundRef = (gameId)         => ref(db, `games/decrypto/${gameId}/currentRound`);
-export const winnerRef       = (gameId)         => ref(db, `games/decrypto/${gameId}/winner`);
-export const teamOrderRef    = (gameId)         => ref(db, `games/decrypto/${gameId}/teamOrder`);
-// NEW:
-export const playersRef      = (gameId)         => ref(db, `games/decrypto/${gameId}/players`);
-export const playerRef       = (gameId, user)   => ref(db, `games/decrypto/${gameId}/players/${user}`);
+/* ------------------ REFERENSI PATH ------------------ */
+export const gameRef        = (gameId) => ref(db, `games/decrypto/${gameId}`);
+export const teamsRef       = (gameId) => ref(db, `games/decrypto/${gameId}/teams`);
+export const teamRef        = (gameId, team) => ref(db, `games/decrypto/${gameId}/teams/${team}`);
+export const playersRef     = (gameId) => ref(db, `games/decrypto/${gameId}/players`);
+export const playerRef      = (gameId, user) => ref(db, `games/decrypto/${gameId}/players/${user}`);
+export const roundsRef      = (gameId) => ref(db, `games/decrypto/${gameId}/rounds`);
+export const roundRef       = (gameId, round) => ref(db, `games/decrypto/${gameId}/rounds/${round}`);
+export const codeRef        = (gameId, round) => ref(db, `games/decrypto/${gameId}/rounds/${round}/code`);
+export const currentRoundRef= (gameId) => ref(db, `games/decrypto/${gameId}/currentRound`);
+export const teamOrderRef   = (gameId) => ref(db, `games/decrypto/${gameId}/teamOrder`);
 
-export function getHostTeam(teamOrder, round) {
-  if (!Array.isArray(teamOrder) || teamOrder.length < 2) return teamOrder?.[0] || null;
-  return (round % 2 === 1) ? teamOrder[0] : teamOrder[1];
-}
-export function getOtherTeam(teamOrder, round) {
-  if (!Array.isArray(teamOrder) || teamOrder.length < 2) return null;
-  return (round % 2 === 1) ? teamOrder[1] : teamOrder[0];
-}
-
+/* ------------------ GENERATOR CODE ------------------ */
 export function generateUniqueCode() {
-  const pool = [1,2,3,4];
-  for (let i = pool.length - 1; i > 0; i--) {
+  let nums = [1, 2, 3, 4];
+  for (let i = nums.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
+    [nums[i], nums[j]] = [nums[j], nums[i]];
   }
-  return pool.slice(0,3);
+  return nums.slice(0, 3); // 3 angka unik
 }
 
+/* ------------------ BUTTON UTILS ------------------ */
 export function setBtnEnabled(btn, enabled) {
   if (!btn) return;
   btn.disabled = !enabled;
-  btn.style.opacity = enabled ? "1" : "0.5";
-  btn.style.pointerEvents = enabled ? "auto" : "none";
 }
 
+/* ------------------ READY STATUS ------------------ */
+export function renderReadyStatus(el, teamsObj) {
+  if (!el) return;
+  const status = Object.entries(teamsObj).map(([t, v]) =>
+    `${t}: ${v.ready ? "✅" : "⌛"}`
+  ).join(" | ");
+  el.textContent = "Ready status → " + status;
+}
+
+/* ------------------ ADVANCE ROUND ------------------ */
+export async function advanceRoundAndResetReady(gameId, newRound, teamsObj) {
+  const updates = {};
+  updates[`games/decrypto/${gameId}/currentRound`] = newRound;
+  updates[`games/decrypto/${gameId}/rounds/${newRound}`] = {};
+  for (const t of Object.keys(teamsObj)) {
+    updates[`games/decrypto/${gameId}/teams/${t}/ready`] = false;
+  }
+  updates[`games/decrypto/${gameId}/rounds/${newRound - 1}/revealed`] = true;
+  await update(ref(db), updates);
+}
+
+/* ------------------ HOST TEAM ------------------ */
+export function getHostTeam(teamOrder, roundNum) {
+  if (!Array.isArray(teamOrder) || teamOrder.length === 0) return null;
+  const idx = (roundNum - 1) % teamOrder.length;
+  return teamOrder[idx];
+}
+
+/* ------------------ WINNER BANNER ------------------ */
 export function mountWinnerBanner(gameId) {
   const bar = document.createElement("div");
   bar.id = "winnerBanner";
@@ -56,20 +72,4 @@ export function mountWinnerBanner(gameId) {
     // Matikan semua input
     document.querySelectorAll("button,input,textarea,select").forEach(el => el.disabled = true);
   });
-}
-
-export async function advanceRoundAndResetReady(gameId, nextRound, teamsObj) {
-  const updates = {};
-  updates[`games/decrypto/${gameId}/currentRound`] = nextRound;
-  Object.keys(teamsObj||{}).forEach(t => {
-    updates[`games/decrypto/${gameId}/teams/${t}/ready`] = false;
-  });
-  await update(ref(db), updates);
-}
-
-export function renderReadyStatus(el, teamsObj) {
-  if (!el) return;
-  const txt = Object.entries(teamsObj || {})
-    .map(([name, t]) => `${name}: ${t.ready ? "✅" : "⌛"}`).join(" | ");
-  el.textContent = txt ? `Status: ${txt}` : "";
 }
