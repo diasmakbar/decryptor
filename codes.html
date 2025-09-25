@@ -91,13 +91,28 @@
     }
 
     // scoreboard live
+    // onValue(gameRef(gameId), (snap) => {
+    //   if (!snap.exists()) return;
+    //   const game = snap.val();
+    //   const teams = Object.keys(game.teams || {});
+    //   const scores = game.teams || {};
+    //   scoreBox.textContent = `Scoreboard → ${teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ")}`;
+    // });
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const game = snap.val();
-      const teams = Object.keys(game.teams || {});
-      const scores = game.teams || {};
-      scoreBox.textContent = `Scoreboard → ${teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ")}`;
+      const teams = game.teams || {};
+      scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
+        `${t}: ${v?.score ?? 0}${v?.eliminated ? " ❌" : ""}`
+      ).join(" | ")}`;
+
+      if (teams[myTeam]?.eliminated) {
+        genBtn.disabled = true;
+        readyBtn.disabled = true;
+        readyState.textContent = "❌ Tim kamu sudah gugur!";
+      }
     });
+
 
     // listen teamOrder
     onValue(teamOrderRef(gameId), (snap) => {

@@ -1,89 +1,119 @@
 // scoring.js
-import { ref, get, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import {
+  get, update, runTransaction, child
+} from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { db } from "./firebase.js";
-import { gameRef, roundRef, getHostTeam, getOtherTeam } from "./game-utils.js";
+import {
+  gameRef, roundRef, getHostTeam
+} from "./game-utils.js";
 
 export async function maybeScoreCurrentRound(gameId) {
+  // Ambil state game
   const gameSnap = await get(gameRef(gameId));
   if (!gameSnap.exists()) return;
   const game = gameSnap.val();
 
   const round = game.currentRound || 1;
-  const teams = game.teams || {};
-  const teamCount = Object.keys(teams).length;
-  const roundSnap = await get(roundRef(gameId, round));
-  if (!roundSnap.exists()) return;
-  const r = roundSnap.val();
+  const teamsMap = game.teams || {};
+  const teamNames = Object.keys(teamsMap);
+  const teamCount = teamNames.length;
+  if (teamCount === 0) return;
+
+  const rSnap = await get(roundRef(gameId, round));
+  if (!rSnap.exists()) return;
+  const r = rSnap.val() || {};
+
+  const code = r.code;
+  if (!Array.isArray(code) || code.length !== 3) return; // belum ada code
 
   const guesses = r.guesses || {};
-  const clues   = r.clues   || {};
-  const code    = r.code    || null;
-
-  // belum ada kode → skip
-  if (!code) return;
-
-  // cek apakah semua tim sudah submit
   const submittedTeams = Object.keys(guesses).length;
-  if (submittedTeams < teamCount) return; // tunggu semua submit
 
-  // ✅ Semua tim sudah submit → lanjut scoring
-  let newScores = { ...teams };
+  // Belum semua tim submit → jangan nilai
+  if (submittedTeams < teamCount) return;
 
-  const hostTeam  = getHostTeam(Object.keys(teams), round);
-  const otherTeam = getOtherTeam(Object.keys(teams), round);
-  const codeKey   = code.join("-");
+  // Idempotent: supaya cuma sekali scoring per round
+  const scoredRef = child(roundRef(gameId, round), "scored");
+  const trx = await runTransaction(scoredRef, (prev) => (prev ? prev : true));
+  if (!trx.committed || trx.snapshot.val() !== true) {
+    return; // sudah pernah dinilai
+  }
 
-  Object.entries(guesses).forEach(([t, g]) => {
-    const guessKey = g.join("-");
-    if (t === hostTeam) {
-      // host salah → minus 1
-      if (guessKey !== codeKey) {
-        newScores[t].score = (newScores[t].score || 0) - 1;
-      }
-    } else {
-      // tim lawan: poin baru dihitung mulai round ke-(teamCount+1)
-      if (round >= teamCount + 1 && guessKey === codeKey) {
-        newScores[t].score = (newScores[t].score || 0) + 1;
+  // -------- Hitung skor --------
+  const codeKey = code.join("-");
+  const order = Array.isArray(game.teamOrder) && game.teamOrder.length >= 2
+    ? game.teamOrder
+    : teamNames;
+
+  const hostTeam = getHostTeam(order, round);
+
+  // Clone skor awal
+  const scores = {};
+  teamNames.forEach(t => { scores[t] = (teamsMap[t]?.score ?? 0); });
+
+  // Host dihukum -1 kalau salah (berlaku dari round 1)
+  {
+    const hostGuess = guesses[hostTeam];
+    if (Array.isArray(hostGuess) && hostGuess.length === 3) {
+      if (hostGuess.join("-") !== codeKey) {
+        scores[hostTeam] = (scores[hostTeam] ?? 0) - 1;
       }
     }
-  });
-
-  // update Firebase
-  const updates = {};
-
-  // update skor tiap tim
-  Object.entries(newScores).forEach(([t, obj]) => {
-    updates[`games/decrypto/${gameId}/teams/${t}/score`] = obj.score;
-  });
-
-  // tandai round sudah direveal
-  updates[`games/decrypto/${gameId}/rounds/${round}/revealed`] = true;
-
-  // cek pemenang
-  const winner = checkWinner(newScores);
-  if (winner) {
-    updates[`games/decrypto/${gameId}/winner`] = winner;
   }
 
-  await update(ref(db), updates);
-}
-
-// ✅ Cek pemenang: 
-// - Kalau ada tim dengan score <= -2 → kalah → tim lain menang
-// - Kalau ada tim dengan score >= +2 → langsung menang
-function checkWinner(teams) {
-  const entries = Object.entries(teams);
-
-  // cek kalah -2
-  const loser = entries.find(([t, obj]) => (obj.score || 0) <= -2);
-  if (loser) {
-    const winner = entries.find(([t, obj]) => t !== loser[0]);
-    return winner ? winner[0] : null;
+  // Non-host dapat +1 kalau benar, mulai round >= teamCount+1
+  if (round >= teamCount + 1) {
+    for (const [t, g] of Object.entries(guesses)) {
+      if (t === hostTeam) continue;
+      if (Array.isArray(g) && g.length === 3) {
+        if (g.join("-") === codeKey) {
+          scores[t] = (scores[t] ?? 0) + 1;
+        }
+      }
+    }
   }
 
-  // cek menang +2
-  const win = entries.find(([t, obj]) => (obj.score || 0) >= 2);
-  if (win) return win[0];
+  // -------- Eliminasi & Winner --------
+  const eliminated = [];
+  let winner = null;
 
-  return null;
+  // Eliminasi tim ≤ -2
+  for (const [t, s] of Object.entries(scores)) {
+    if ((s ?? 0) <= -2) {
+      eliminated.push(t);
+    }
+  }
+
+  // Cek winner
+  // 1. Ada yang +2 → langsung menang
+  const plusTwo = Object.entries(scores).find(([t, s]) => (s ?? 0) >= 2);
+  if (plusTwo) {
+    winner = plusTwo[0];
+  } else {
+    // 2. Kalau sisa 1 tim yang belum eliminated → dia menang
+    const aliveTeams = teamNames.filter(t => !eliminated.includes(t) && !(teamsMap[t]?.eliminated));
+    if (aliveTeams.length === 1) {
+      winner = aliveTeams[0];
+    }
+  }
+
+  // -------- Commit ke Firebase --------
+  const updates = {
+    [`rounds/${round}/revealed`]: true,
+  };
+
+  // Update skor tiap tim
+  teamNames.forEach(t => {
+    updates[`teams/${t}/score`] = scores[t] ?? 0;
+  });
+
+  // Tandai eliminated
+  eliminated.forEach(t => {
+    updates[`teams/${t}/eliminated`] = true;
+  });
+
+  // Kalau ada winner final
+  if (winner) updates[`winner`] = winner;
+
+  await update(gameRef(gameId), updates);
 }

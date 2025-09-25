@@ -55,7 +55,7 @@
   <div id="history" class="history"></div>
 
   <script type="module">
-    import { ref, onValue, update, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { onValue, update, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
       currentRoundRef, teamRef, roundRef, gameRef, getHostTeam
@@ -77,6 +77,7 @@
     let currentRound = 1;
     let roundUnsub = null;
     let totalTeams = 0;
+    let teamNames = [];
 
     // tampilkan kata tim
     const wSnap = await get(teamRef(gameId, team));
@@ -88,13 +89,34 @@
     }
 
     // scoreboard + totalTeams
+    // onValue(gameRef(gameId), (snap) => {
+    //   if (!snap.exists()) return;
+    //   const game = snap.val();
+    //   const teams = game.teams || {};
+    //   teamNames = Object.keys(teams);
+    //   totalTeams = teamNames.length;
+    //   scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => `${t}: ${v?.score ?? 0}`).join(" | ")}`;
+    // });
     onValue(gameRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const game = snap.val();
       const teams = game.teams || {};
       totalTeams = Object.keys(teams).length;
-      scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => `${t}: ${v?.score ?? 0}`).join(" | ")}`;
+      teamNames = Object.keys(teams);
+
+      // scoreboard
+      scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
+        `${t}: ${v?.score ?? 0}${v?.eliminated ? " ❌" : ""}`
+      ).join(" | ")}`;
+
+      // cek kalau tim lo eliminated
+      if (teams[team]?.eliminated) {
+        submitBtn.disabled = true;
+        readyBtn.disabled = true;
+        answerStatus.textContent = "❌ Tim kamu sudah gugur!";
+      }
     });
+
 
     // watch currentRound
     onValue(currentRoundRef(gameId), (snap) => {
@@ -175,12 +197,12 @@
     }
 
     function renderHistory(r) {
-      const host = getHostTeam(Object.keys(r.teams||{}), currentRound);
+      const host = getHostTeam(teamNames, currentRound);
       const codeTxt = Array.isArray(r.code) ? r.code.join(" - ") : "-";
       historyDiv.innerHTML = `<div class="roundCard">
         <div class="roundHeader">Round ${currentRound} - Giliran Team ${host} speak up!</div>
         <div class="teamRow">
-          ${Object.keys(r.guesses || {}).map(t => {
+          ${teamNames.map(t => {
             const clues = r.clues?.[t] ? r.clues[t].join(" | ") : "-";
             const guesses = r.guesses?.[t] ? r.guesses[t].join(" - ") : "-";
             return `<div class="teamBox">
