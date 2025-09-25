@@ -51,10 +51,19 @@ export async function advanceRoundAndResetReady(gameId, newRound, teamsObj) {
 }
 
 /* ------------------ HOST TEAM ------------------ */
-export function getHostTeam(teamOrder, roundNum) {
-  if (!Array.isArray(teamOrder) || teamOrder.length === 0) return null;
-  const idx = (roundNum - 1) % teamOrder.length;
-  return teamOrder[idx];
+// export function getHostTeam(teamOrder, roundNum) {
+//   if (!Array.isArray(teamOrder) || teamOrder.length === 0) return null;
+//   const idx = (roundNum - 1) % teamOrder.length;
+//   return teamOrder[idx];
+// }
+
+export function getHostTeam(teamOrder, round) {
+  if (!Array.isArray(teamOrder) || teamOrder.length < 2) return teamOrder?.[0] || null;
+  return (round % 2 === 1) ? teamOrder[0] : teamOrder[1];
+}
+export function getOtherTeam(teamOrder, round) {
+  if (!Array.isArray(teamOrder) || teamOrder.length < 2) return null;
+  return (round % 2 === 1) ? teamOrder[1] : teamOrder[0];
 }
 
 /* ------------------ WINNER BANNER ------------------ */
