@@ -167,7 +167,7 @@
       });
       submitBtn.disabled = false;
       answerStatus.textContent = "";
-      historyDiv.innerHTML = "";
+      // historyDiv.innerHTML = "";
     }
 
     function renderHistory(r, host) {
@@ -175,7 +175,7 @@
       const clues = r.clues?.[team] ? r.clues[team].join(" | ") : "-";
       const guesses = r.guesses?.[team] ? r.guesses[team].join(" - ") : "-";
 
-      historyDiv.innerHTML = `<div class="roundCard">
+      historyDiv.innerHTML += `<div class="roundCard">
         <div class="roundHeader">Round ${currentRound} - Giliran Team ${host} kasih clue!</div>
         <div class="teamBox">
           <b>${team}</b><br/>
