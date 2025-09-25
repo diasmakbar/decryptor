@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Decryptor - Masuk</title>
+  <style>
+    body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
+    h1{margin-bottom:20px}
+    input,button{padding:12px;font-size:16px;border-radius:8px;margin:6px 0;width:90%;max-width:340px;border:1px solid #444}
+    button{background:#3b82f6;color:#fff;border:none;cursor:pointer}
+    button:hover{background:#2563eb}
+  </style>
+</head>
+<body>
+  <h1>Decrypto Game - 🔑 Masuk Game Room</h1>
+  <input id="gameId" placeholder="Game ID (4 digit)"/>
+  <br/>
+  <input id="teamName" placeholder="Nama Tim"/>
+  <br/>
+  <button id="joinBtn">Join</button>
+
+  <script type="module">
+    import { ref, get, set, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { db } from "./firebase.js";
+
+    document.getElementById("joinBtn").addEventListener("click", start);
+
+    async function start() {
+      const gameId = document.getElementById("gameId").value.trim();
+      const team = (document.getElementById("teamName").value || "").trim();
+      if (!/^\d{4}$/.test(gameId)) return alert("Game ID harus 4 digit angka!");
+      if (!team) return alert("Isi nama tim!");
+
+      const gamePath = `games/decrypto/${gameId}`;
+      const gameRef = ref(db, gamePath);
+      const snap = await get(gameRef);
+
+      // load wordbank
+      const text = await fetch("words.txt").then(r=>r.text());
+      const allWords = text.split("\n").map(w=>w.trim()).filter(Boolean);
+
+      const shuffle = a => { const x=[...a]; for(let i=x.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]]} return x; };
+
+      // case 1: game belum ada → buat baru
+      if (!snap.exists()) {
+        const selected = shuffle(allWords).slice(0,4);
+        await set(gameRef, {
+          currentRound: 1,
+          winner: null,
+          teamOrder: [team],
+          teams: { [team]: { words: selected, ready: false, score: 0, hasGenerator: true } },
+          rounds: {}
+        });
+        return go("codes.html", gameId, team);
+      }
+
+      const game = snap.val() || {};
+
+      // case 2: game sudah selesai → reset & buat baru
+      if (game.winner) {
+        await remove(gameRef);
+        const selected = shuffle(allWords).slice(0,4);
+        await set(gameRef, {
+          currentRound: 1,
+          winner: null,
+          teamOrder: [team],
+          teams: { [team]: { words: selected, ready: false, score: 0, hasGenerator: true } },
+          rounds: {}
+        });
+        return go("codes.html", gameId, team);
+      }
+
+      // case 3: game sedang berlangsung (round >= 2) → tolak
+      if ((game.currentRound || 1) >= 2) {
+        alert("Game sedang berlangsung!");
+        return;
+      }
+
+      // case 4: round masih 1 → boleh tim baru join
+      const teams = game.teams || {};
+      if (!teams[team]) {
+        // buat tim baru
+        const used = Object.values(teams).flatMap(t => t.words || []);
+        const remaining = allWords.filter(w => !used.includes(w));
+        if (remaining.length < 4) return alert("Kata tersisa tidak cukup.");
+        const selected = shuffle(remaining).slice(0,4);
+        const newOrder = Array.isArray(game.teamOrder) ? [...game.teamOrder, team] : [team];
+        await update(ref(db), {
+          [`${gamePath}/teams/${team}`]: { words: selected, ready: false, score: 0, hasGenerator: true },
+          [`${gamePath}/teamOrder`]: newOrder
+        });
+        return go("codes.html", gameId, team);
+      }
+
+      // case 5: tim sudah ada → join role
+      if (!teams[team].hasGenerator) {
+        await update(ref(db), { [`${gamePath}/teams/${team}/hasGenerator`]: true });
+        return go("codes.html", gameId, team);
+      } else {
+        return go("answers.html", gameId, team);
+      }
+    }
+
+    function go(page, gameId, team) {
+      window.location.href = `${page}?gameId=${gameId}&team=${encodeURIComponent(team)}`;
+    }
+  </script>
+</body>
+</html>

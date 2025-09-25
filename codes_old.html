@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Decryptor - Generator</title>
+  <style>
+    body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
+    h1{margin:10px 0}
+    .card{background:#0b3fad;border:1px solid #154bc2;border-radius:12px;padding:14px;margin:12px auto;max-width:520px}
+    /* .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:10px;border-radius:10px;margin:8px 0} */
+    .wordGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* default web: 4 kolom */
+    gap: 12px;
+    max-width: 800px;
+    margin: 0 auto;
+    }
+    .word {
+    background: #2563eb;
+    color: #fff;
+    font-weight: 800;
+    font-size: 18px;
+    padding: 14px;
+    border-radius: 10px;
+    text-align: center;
+    }
+    @media (max-width: 600px) {
+    .wordGrid {
+        grid-template-columns: repeat(2, 1fr); /* mobile: 2 kolom */
+    }
+    }
+    button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
+    #genBtn{background:#22c55e;color:#111}
+    #readyBtn{background:#3b82f6;color:#fff}
+    #code{font-size:36px;font-weight:800;letter-spacing:.25em;margin:14px 0}
+    .status{opacity:.9;margin-top:12px}
+    .scoreBoard{background:#222;padding:10px;border-radius:10px;max-width:520px;margin:10px auto}
+  </style>
+</head>
+<body>
+  <h1 id="hdr">Round</h1>
+
+  <div id="wordBox" class="card">Loading kata…</div>
+
+  <div id="code">— — —</div>
+  <div>
+    <button id="genBtn">Generate Code</button>
+    <button id="readyBtn" disabled>Ready for Next Round</button>
+  </div>
+  <div id="readyState" class="status"></div>
+  <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
+
+  <script type="module">
+    import { onValue, set, get, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { db } from "./firebase.js";
+    import {
+      currentRoundRef, teamsRef, codeRef, teamOrderRef, teamRef, gameRef,
+      getHostTeam, generateUniqueCode,
+      setBtnEnabled, renderReadyStatus, advanceRoundAndResetReady,
+      mountWinnerBanner
+    } from "./game-utils.js";
+    import { maybeScoreCurrentRound } from "./scoring.js";
+
+    const params = new URLSearchParams(window.location.search);
+    const gameId = params.get("gameId");
+    const myTeam = params.get("team");
+
+    mountWinnerBanner(gameId);
+
+    let currentRound = 1;
+    let teamOrder = [];
+    let codeUnsub = null;
+
+    const hdr = document.getElementById("hdr");
+    const codeBox = document.getElementById("code");
+    const genBtn = document.getElementById("genBtn");
+    const readyBtn = document.getElementById("readyBtn");
+    const readyState = document.getElementById("readyState");
+    const scoreBox = document.getElementById("scoreBox");
+
+    // tampilkan kata tim (4 kotak biru, teks putih tebal, font gede)
+    const wordBox = document.getElementById("wordBox");
+    const wSnap = await get(teamRef(gameId, myTeam));
+    if (wSnap.exists()) {
+      const { words = [] } = wSnap.val() || {};
+    //   wordBox.innerHTML = words.map((w,i)=>`<div class="word">${i+1}. ${w}</div>`).join("");
+            wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
+    } else {
+      wordBox.textContent = "Kata tim tidak ditemukan.";
+    }
+
+    // scoreboard live
+    onValue(gameRef(gameId), (snap) => {
+      if (!snap.exists()) return;
+      const game = snap.val();
+      const teams = game.teams || {};
+      teamNames = Object.keys(teams);
+      totalTeams = teamNames.length;
+      scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
+        `${t}: ${v?.score ?? 0}${v?.eliminated ? " ❌" : ""}`
+      ).join(" | ")}`;
+      if (teams[team]?.eliminated) {
+        submitBtn.disabled = true;
+        answerStatus.textContent = "❌ Tim kamu sudah gugur!";
+      }
+    });
+    // onValue(gameRef(gameId), (snap) => {
+    //   if (!snap.exists()) return;
+    //   const game = snap.val();
+    //   const teams = Object.keys(game.teams || {});
+    //   const scores = game.teams || {};
+    //   scoreBox.textContent = `Scoreboard → ${teams.map(t => `${t}: ${scores[t]?.score ?? 0}`).join(" | ")}`;
+    // });
+    // onValue(gameRef(gameId), (snap) => {
+    //   if (!snap.exists()) return;
+    //   const game = snap.val();
+    //   const teams = game.teams || {};
+    //   scoreBox.textContent = `Scoreboard → ${Object.entries(teams).map(([t,v]) => 
+    //     `${t}: ${v?.score ?? 0}${v?.eliminated ? " ❌" : ""}`
+    //   ).join(" | ")}`;
+
+    //   if (teams[myTeam]?.eliminated) {
+    //     genBtn.disabled = true;
+    //     readyBtn.disabled = true;
+    //     readyState.textContent = "❌ Tim kamu sudah gugur!";
+    //   }
+    // });
+
+
+    // listen teamOrder
+    onValue(teamOrderRef(gameId), (snap) => {
+      teamOrder = snap.val() || teamOrder;
+      updateRoleUI();
+    });
+
+    // listener code per round
+    function attachCodeListener(round) {
+      if (codeUnsub) codeUnsub(); // unsubscribe lama
+      codeUnsub = onValue(codeRef(gameId, round), (snap) => {
+        const host = getHostTeam(teamOrder, round);
+        const isHost = host && myTeam === host;
+        const hasCode = snap.exists();
+
+        if (isHost && hasCode) {
+          codeBox.textContent = snap.val().join(" - ");
+        } else {
+          codeBox.textContent = "— — —";
+        }
+
+        setBtnEnabled(readyBtn, hasCode);
+        maybeScoreCurrentRound(gameId);
+      });
+    }
+
+    // listen currentRound
+    onValue(currentRoundRef(gameId), (snap) => {
+      if (!snap.exists()) return;
+      currentRound = snap.val();
+      hdr.textContent = `Round ${currentRound}`;
+      codeBox.textContent = "— — —";
+      updateRoleUI();
+      attachCodeListener(currentRound); // attach listener baru tiap round
+    });
+
+    // listen ready states
+    onValue(teamsRef(gameId), async (snap) => {
+      const teamsObj = snap.val() || {};
+      renderReadyStatus(readyState, teamsObj);
+      const teamCount = Object.values(teamsObj).length;
+      const allReady = teamCount >= 2 && Object.values(teamsObj).every(t => t.ready);
+      if (allReady) await advanceRoundAndResetReady(gameId, currentRound + 1, teamsObj);
+    });
+
+    function updateRoleUI() {
+      const host = getHostTeam(teamOrder, currentRound);
+      const isHost = host && myTeam === host;
+      // hanya host yang bisa generate
+      get(codeRef(gameId, currentRound)).then(snap => {
+        const hasCode = snap.exists();
+        setBtnEnabled(genBtn, isHost && !hasCode);
+      });
+    }
+
+    genBtn.addEventListener("click", async () => {
+      const code = generateUniqueCode();
+      await set(codeRef(gameId, currentRound), code);
+      setBtnEnabled(genBtn, false);
+    });
+
+    readyBtn.addEventListener("click", async () => {
+      await update(teamRef(gameId, myTeam), { ready: true });
+    });
+  </script>
+</body>
+</html>
