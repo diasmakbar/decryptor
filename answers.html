@@ -5,31 +5,135 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Decryptor - Answers</title>
   <style>
-    body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
-    h1{margin:10px 0}
-    .wordGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:800px;margin:0 auto}
-    .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:14px;border-radius:10px;text-align:center}
-    .word small{display:block;font-weight:400;font-size:14px;opacity:.8;margin-top:4px}
-    @media (max-width:600px){.wordGrid{grid-template-columns:repeat(2,1fr)}}
-    .inputs{margin:16px auto;max-width:600px}
-    .inputs input{margin:6px;padding:10px;border-radius:8px;border:1px solid #444;width:140px;text-align:center}
-    button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px}
-    #submitBtn{background:#22c55e;color:#111}
-    .status{opacity:.9;margin-top:12px}
-    .scoreBoard{background:#222;padding:10px;border-radius:10px;max-width:520px;margin:14px auto}
-    .history{max-width:900px;margin:18px auto;text-align:left}
-    .roundCard{background:#1f2937;border:1px solid #374151;border-radius:12px;padding:16px;margin:18px 0}
-    .roundHeader{font-weight:700;margin-bottom:12px;text-align:center}
-    .teamBox{background:#111;padding:12px;border-radius:8px}
-    .teamBox b{display:block;margin-bottom:6px}
-  </style>
+  body {
+    font-family:sans-serif;
+    background:#111;
+    color:#eee;
+    margin:0;
+    padding:24px;
+    text-align:center
+  }
+  h1 {
+    margin:10px 0
+  }
+
+  /* Kotak kata */
+  .wordGrid {
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:12px;
+    max-width:800px;
+    margin:0 auto
+  }
+  .word {
+    background:#2563eb;
+    color:#fff;
+    font-weight:800;
+    font-size:18px;
+    padding:14px;
+    border-radius:10px;
+    text-align:center
+  }
+  .word small {
+    display:block;
+    font-weight:400;
+    font-size:14px;
+    opacity:.8;
+    margin-top:4px
+  }
+  @media (max-width:600px){
+    .wordGrid{grid-template-columns:repeat(2,1fr)}
+  }
+
+  /* Input Clue + Angka */
+  .inputs {
+    margin:16px auto;
+    max-width:600px;
+    display:grid;
+    grid-template-columns: 2fr 1fr;
+    gap:8px 12px;
+  }
+  .inputs input {
+    padding:10px;
+    border-radius:8px;
+    border:1px solid #444;
+    font-size:1rem;
+    box-sizing:border-box;
+  }
+  .inputs input[type="text"] {
+    text-align:left;
+  }
+  .inputs input[type="number"] {
+    text-align:center;
+  }
+  @media (max-width:480px){
+    .inputs {
+      grid-template-columns: minmax(120px,2fr) minmax(50px,1fr);
+    }
+  }
+
+  /* Tombol */
+  button {
+    padding:12px 16px;
+    border:none;
+    border-radius:10px;
+    font-size:16px;
+    margin:6px
+  }
+  #submitBtn {
+    background:#22c55e;
+    color:#111
+  }
+
+  /* Status & Scoreboard */
+  .status {
+    opacity:.9;
+    margin-top:12px
+  }
+  .scoreBoard {
+    background:#222;
+    padding:10px;
+    border-radius:10px;
+    max-width:520px;
+    margin:14px auto
+  }
+
+  /* History */
+  .history {
+    max-width:900px;
+    margin:18px auto;
+    text-align:left
+  }
+  .roundCard {
+    background:#1f2937;
+    border:1px solid #374151;
+    border-radius:12px;
+    padding:16px;
+    margin:18px 0
+  }
+  .roundHeader {
+    font-weight:700;
+    margin-bottom:12px;
+    text-align:center
+  }
+  .teamBox {
+    background:#111;
+    padding:12px;
+    border-radius:8px
+  }
+  .teamBox b {
+    display:block;
+    margin-bottom:6px
+  }
+</style>
+
 </head>
 <body>
   <h1 id="hdr">Round</h1>
 
   <div id="wordBox" class="wordGrid" aria-live="polite"></div>
 
-  <div class="inputs">
+  <!-- <div class="inputs">
     <div>
       <input type="text" id="clue1" placeholder="Clue 1"/>
       <input type="number" id="num1" min="1" max="4" placeholder="#"/>
@@ -42,7 +146,23 @@
       <input type="text" id="clue3" placeholder="Clue 3"/>
       <input type="number" id="num3" min="1" max="4" placeholder="#"/>
     </div>
+  </div> -->
+
+  <div class="inputs">
+    <div class="pair">
+      <input type="text" id="clue1" placeholder="Clue 1"/>
+      <input type="number" id="num1" min="1" max="4" placeholder="#"/>
+    </div>
+    <div class="pair">
+      <input type="text" id="clue2" placeholder="Clue 2"/>
+      <input type="number" id="num2" min="1" max="4" placeholder="#"/>
+    </div>
+    <div class="pair">
+      <input type="text" id="clue3" placeholder="Clue 3"/>
+      <input type="number" id="num3" min="1" max="4" placeholder="#"/>
+    </div>
   </div>
+
 
   <button id="submitBtn">Submit</button>
   <div id="answerStatus" class="status"></div>
