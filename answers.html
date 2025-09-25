@@ -140,19 +140,39 @@
 
         submitBtn.disabled = !!already;
 
-        if (already && !r.revealed) {
-          answerStatus.textContent =
-            `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
-          readyBtn.style.display = "none";
-          readyBtn.disabled = true;
-        }
+        // if (already && !r.revealed) {
+        //   answerStatus.textContent =
+        //     `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
+        //   readyBtn.style.display = "none";
+        //   readyBtn.disabled = true;
+        // }
 
+        // if (r.revealed) {
+        //   answerStatus.textContent = "";
+        //   renderHistory(r);
+        //   readyBtn.style.display = "inline-block";
+        //   readyBtn.disabled = false;
+        // }
         if (r.revealed) {
+          // Round sudah selesai → tampilkan history
           answerStatus.textContent = "";
           renderHistory(r);
           readyBtn.style.display = "inline-block";
           readyBtn.disabled = false;
+        } else {
+          // Round belum selesai
+          if (already) {
+            answerStatus.textContent =
+              `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
+            readyBtn.style.display = "none";
+            readyBtn.disabled = true;
+          } else {
+            answerStatus.textContent = "";
+            readyBtn.style.display = "none";
+            readyBtn.disabled = true;
+          }
         }
+
       });
     }
 
