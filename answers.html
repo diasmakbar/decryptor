@@ -120,60 +120,46 @@
 
     // watch currentRound
     onValue(currentRoundRef(gameId), (snap) => {
+          if (!snap.exists()) return;
+          const newRound = snap.val();
+          if (newRound !== currentRound) {
+            currentRound = newRound;
+            hdr.textContent = `Round ${currentRound}`;
+            resetFormUI();
+            bindThisRoundWatcher(currentRound);
+          }
+        });
+
+        function bindThisRoundWatcher(round) {
+          if (roundUnsub) roundUnsub();
+          roundUnsub = onValue(roundRef(gameId, round), (snap) => {
       if (!snap.exists()) return;
-      const newRound = snap.val();
-      if (newRound !== currentRound) {
-        currentRound = newRound;
-        hdr.textContent = `Round ${currentRound}`;
-        resetFormUI();
-        bindThisRoundWatcher(currentRound);
+      const r = snap.val() || {};
+      const already = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3;
+      const guessesCount = Object.keys(r.guesses || {}).length;
+
+      submitBtn.disabled = !!already;
+
+      if (r.revealed) {
+        // ✅ Round selesai → tampilkan history & enable Ready
+        answerStatus.textContent = "";
+        renderHistory(r);
+        readyBtn.style.display = "inline-block";
+        readyBtn.disabled = false;
+        return;
       }
+
+      // kalau belum revealed
+      if (already) {
+        answerStatus.textContent =
+          `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
+      } else {
+        answerStatus.textContent = "";
+      }
+      readyBtn.style.display = "none";
+      readyBtn.disabled = true;
     });
 
-    function bindThisRoundWatcher(round) {
-      if (roundUnsub) roundUnsub();
-      roundUnsub = onValue(roundRef(gameId, round), (snap) => {
-        if (!snap.exists()) return;
-        const r = snap.val() || {};
-        const already = Array.isArray(r.guesses?.[team]) && r.guesses[team].length === 3;
-        const guessesCount = Object.keys(r.guesses || {}).length;
-
-        submitBtn.disabled = !!already;
-
-        // if (already && !r.revealed) {
-        //   answerStatus.textContent =
-        //     `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
-        //   readyBtn.style.display = "none";
-        //   readyBtn.disabled = true;
-        // }
-
-        // if (r.revealed) {
-        //   answerStatus.textContent = "";
-        //   renderHistory(r);
-        //   readyBtn.style.display = "inline-block";
-        //   readyBtn.disabled = false;
-        // }
-        if (r.revealed) {
-          // Round sudah selesai → tampilkan history
-          answerStatus.textContent = "";
-          renderHistory(r);
-          readyBtn.style.display = "inline-block";
-          readyBtn.disabled = false;
-        } else {
-          // Round belum selesai
-          if (already) {
-            answerStatus.textContent =
-              `✅ Jawaban terkirim, tunggu tim lain... (${guessesCount}/${totalTeams})`;
-            readyBtn.style.display = "none";
-            readyBtn.disabled = true;
-          } else {
-            answerStatus.textContent = "";
-            readyBtn.style.display = "none";
-            readyBtn.disabled = true;
-          }
-        }
-
-      });
     }
 
     // submit
