@@ -12,6 +12,7 @@ export const roundRef       = (gameId, round) => ref(db, `games/decrypto/${gameI
 export const codeRef        = (gameId, round) => ref(db, `games/decrypto/${gameId}/rounds/${round}/code`);
 export const currentRoundRef= (gameId) => ref(db, `games/decrypto/${gameId}/currentRound`);
 export const teamOrderRef   = (gameId) => ref(db, `games/decrypto/${gameId}/teamOrder`);
+export const winnerRef      = (gameId) => ref(db, `games/decrypto/${gameId}/winner`);
 
 /* ------------------ GENERATOR CODE ------------------ */
 export function generateUniqueCode() {
