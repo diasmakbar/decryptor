@@ -114,6 +114,11 @@
       readyBtn.disabled = true;
       updateRoleUI();
       attachCodeListener(currentRound);
+      // listen for timer start to enable ready
+      onValue(roundRef(gameId, currentRound), (snap) => {
+        const r = snap.val() || {};
+        setBtnEnabled(readyBtn, !!r.timerStart);
+      });
     });
 
     genBtn.addEventListener("click", async () => {

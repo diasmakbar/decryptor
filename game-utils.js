@@ -28,6 +28,8 @@ export function generateUniqueCode() {
 export function setBtnEnabled(btn, enabled) {
   if (!btn) return;
   btn.disabled = !enabled;
+  btn.style.opacity = enabled ? "1" : "0.5";
+  btn.style.pointerEvents = enabled ? "auto" : "none";
 }
 
 /* ------------------ READY STATUS ------------------ */
