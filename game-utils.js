@@ -1,4 +1,4 @@
-import { ref, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, update, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { db } from "./firebase.js";
 
 /* ------------------ REFERENSI PATH ------------------ */
