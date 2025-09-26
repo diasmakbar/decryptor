@@ -28,8 +28,6 @@
   <input id="username" placeholder="Username (case-insensitive)"/>
   <br/>
   <button id="joinBtn">Join</button>
-  <br/>
-  <button id="helpBtn" style="width:auto;margin-top:20px;background:#6b7280">?</button>
 
   <!-- Modal pilih role -->
   <div id="roleOverlay" class="overlay" role="dialog" aria-modal="true">
@@ -46,19 +44,6 @@
     </div>
   </div>
 
-  <!-- Modal help -->
-  <div id="helpOverlay" class="overlay" role="dialog" aria-modal="true">
-    <div class="modal" style="max-width:600px;text-align:left">
-      <h2 id="helpTitle">Help</h2>
-      <div id="helpContent" style="white-space:pre-line;margin:10px 0"></div>
-      <div class="row">
-        <button id="helpPrev" disabled>Previous</button>
-        <button id="helpNext">Next</button>
-        <button id="helpPlay" style="background:#22c55e">Play!</button>
-      </div>
-    </div>
-  </div>
-
   <script type="module">
     import { ref, get, set, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
@@ -69,53 +54,7 @@
     const btnHunter = $("btnHunter");
     const btnCancel = $("btnCancel");
 
-    const helpOverlay = $("helpOverlay");
-    const helpTitle = $("helpTitle");
-    const helpContent = $("helpContent");
-    const helpPrev = $("helpPrev");
-    const helpNext = $("helpNext");
-    const helpPlay = $("helpPlay");
-
-    let helpSections = [];
-    let currentHelpIndex = 0;
-
     $("joinBtn").addEventListener("click", start);
-    $("helpBtn").addEventListener("click", showHelp);
-
-    helpPrev.addEventListener("click", () => {
-      if (currentHelpIndex > 0) {
-        currentHelpIndex--;
-        updateHelp();
-      }
-    });
-
-    helpNext.addEventListener("click", () => {
-      if (currentHelpIndex < helpSections.length - 1) {
-        currentHelpIndex++;
-        updateHelp();
-      }
-    });
-
-    helpPlay.addEventListener("click", () => {
-      helpOverlay.style.display = "none";
-    });
-
-    async function showHelp() {
-      if (helpSections.length === 0) {
-        const text = await fetch("Decrypto Games.txt").then(r => r.text());
-        helpSections = text.split(/^-- \d+nd Section/m).map(s => s.trim()).filter(Boolean);
-      }
-      currentHelpIndex = 0;
-      updateHelp();
-      helpOverlay.style.display = "flex";
-    }
-
-    function updateHelp() {
-      helpTitle.textContent = `Help (${currentHelpIndex + 1}/${helpSections.length})`;
-      helpContent.textContent = helpSections[currentHelpIndex];
-      helpPrev.disabled = currentHelpIndex === 0;
-      helpNext.disabled = currentHelpIndex === helpSections.length - 1;
-    }
 
     function lc(s){ return (s||"").trim().toLowerCase(); }
 
