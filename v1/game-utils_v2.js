@@ -69,15 +69,19 @@ export function getOtherTeam(teamOrder, round) {
   return (round % 2 === 1) ? teamOrder[1] : teamOrder[0];
 }
 
-/* ------------------ WINNER REDIRECT ------------------ */
+/* ------------------ WINNER BANNER ------------------ */
 export function mountWinnerBanner(gameId) {
+  const bar = document.createElement("div");
+  bar.id = "winnerBanner";
+  bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;background:#222;color:#fff;padding:12px;text-align:center;font-weight:bold;z-index:9999;display:none;";
+  document.body.appendChild(bar);
   onValue(winnerRef(gameId), (snap) => {
     const w = snap.val();
-    if (!w) return;
+    if (!w) { bar.style.display="none"; bar.textContent=""; return; }
+    bar.style.display = "block";
     const myTeam = new URLSearchParams(location.search).get("team");
+    bar.textContent = (myTeam && myTeam === w) ? `TEAM ${w.toUpperCase()} MENANG! 🎉` : `GAME OVER! Pemenang: ${w.toUpperCase()}`;
     // Matikan semua input
     document.querySelectorAll("button,input,textarea,select").forEach(el => el.disabled = true);
-    // Redirect to winner page
-    location.href = `winner.html?gameId=${gameId}&team=${encodeURIComponent(myTeam)}`;
   });
 }

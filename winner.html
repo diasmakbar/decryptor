@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Decryptor - Winner</title>
+  <style>
+    body{font-family:sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
+    h1{margin:20px 0}
+    h3{margin:20px 0 10px}
+    .winnerCard{background:#1f2937;border:1px solid #10b981;border-radius:12px;padding:24px;max-width:400px;margin:20px auto}
+    .wordGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:800px;margin:0 auto}
+    .word{background:#2563eb;color:#fff;font-weight:800;font-size:18px;padding:14px;border-radius:10px;text-align:center}
+    .scoreTable{margin:20px auto;max-width:600px;border-collapse:collapse}
+    .scoreTable th,.scoreTable td{border:1px solid #444;padding:8px;text-align:center}
+    .scoreTable th{background:#222}
+    .winner{font-weight:bold;color:#10b981}
+    button{padding:12px 16px;border:none;border-radius:10px;font-size:16px;margin:6px;cursor:pointer;background:#3b82f6;color:#fff}
+    button:hover{background:#2563eb}
+  </style>
+</head>
+<body>
+  <h1>Game Over!</h1>
+  <div id="winnerCard" class="winnerCard">Loading winner...</div>
+  <div id="teamsWords"></div>
+  <div id="scoreTable"></div>
+  <button onclick="location.href='index.html'">Back to Home</button>
+
+  <script type="module">
+    import { onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { db } from "./firebase.js";
+    import { gameRef } from "./game-utils.js";
+
+    const params = new URLSearchParams(window.location.search);
+    const gameId = params.get("gameId");
+    const myTeam = params.get("team");
+
+    const winnerCard = document.getElementById("winnerCard");
+
+    onValue(gameRef(gameId), (snap) => {
+      if (!snap.exists()) return;
+      const game = snap.val();
+      const winner = game.winner;
+      if (!winner) return;
+      const teams = game.teams || {};
+      const myScore = teams[myTeam]?.score ?? 0;
+      const winnerScore = teams[winner]?.score ?? 0;
+      const isWinner = myTeam === winner;
+      winnerCard.innerHTML = `
+        <h2>${isWinner ? '🎉 Congratulations!' : '😔 Game Over'}</h2>
+        <p><strong>Winner: Team ${winner}</strong></p>
+        <p>Final Score: ${winnerScore} points</p>
+        <p>Your Score: ${myScore} points</p>
+      `;
+
+      const teamsWords = document.getElementById("teamsWords");
+      const scoreTableDiv = document.getElementById("scoreTable");
+
+      let teamsWordsHtml = '';
+      let scoreTableHtml = '<table class="scoreTable"><thead><tr><th>Team</th><th>Total Time</th><th>Final Score</th></tr></thead><tbody>';
+
+      const teamEntries = Object.entries(teams).sort((a, b) => {
+        const [ta, va] = a;
+        const [tb, vb] = b;
+        const sa = va.score ?? 0;
+        const sb = vb.score ?? 0;
+        if (sa !== sb) return sb - sa; // higher score first
+        const taTime = va.totalTime ?? Infinity;
+        const tbTime = vb.totalTime ?? Infinity;
+        return taTime - tbTime; // lower time first
+      });
+
+      teamEntries.forEach(([team, data]) => {
+        const words = data.words || [];
+        const wordsHtml = Array.isArray(words) ? words : Object.values(words);
+        teamsWordsHtml += `<h3>Team ${team}</h3><div class="wordGrid">${wordsHtml.map(w => `<div class="word">${w}</div>`).join('')}</div>`;
+
+        const score = data.score ?? 0;
+        const time = data.totalTime ?? 0;
+        const minutes = Math.floor(time / 60000);
+        const seconds = Math.floor((time % 60000) / 1000);
+        const ms = time % 1000;
+        const timeStr = `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}.${ms.toString().padStart(3,'0')}`;
+
+        const isWinner = team === winner;
+        const winnerClass = isWinner ? 'winner' : '';
+        scoreTableHtml += `<tr class="${winnerClass}"><td>Team ${team}</td><td>${timeStr}</td><td>${score}</td></tr>`;
+      });
+
+      scoreTableHtml += '</tbody></table>';
+
+      teamsWords.innerHTML = teamsWordsHtml;
+      scoreTableDiv.innerHTML = scoreTableHtml;
+    });
+  </script>
+</body>
+</html>

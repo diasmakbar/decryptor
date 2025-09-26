@@ -61,7 +61,7 @@
     import { db } from "./firebase.js";
     import {
       currentRoundRef, teamRef, roundsRef, roundRef, gameRef,
-      playerRef, setBtnEnabled, teamOrderRef, getHostTeam, getOtherTeam
+      playerRef, setBtnEnabled
     } from "./game-utils.js";
     import { maybeScoreCurrentRound } from "./scoring.js";
 
@@ -82,8 +82,6 @@
     // role check
     const pSnap = await get(playerRef(gameId, user));
     if (!pSnap.exists() || pSnap.val()?.role !== "hunter") location.replace(`index.html`);
-
-    mountWinnerBanner(gameId);
 
     // tampilkan kata tim sendiri
     const wSnap = await get(teamRef(gameId, team));
@@ -109,18 +107,6 @@
     const processedRounds = new Set();
     let teamNames = [];
     let currentRoundData = {};
-    let teamOrder = [];
-
-    function updateHeader() {
-      const host = getHostTeam(teamOrder, currentRound);
-      const isHost = host && team === host;
-      const otherTeam = getOtherTeam(teamOrder, currentRound);
-      if (isHost) {
-        hdr.textContent = `Round ${currentRound} | It's your team, Team ${team} give clues! Please guess it right 😤`;
-      } else {
-        hdr.textContent = `Round ${currentRound} | It's the other team, Team ${otherTeam} give clues, guess them! 🧐`;
-      }
-    }
 
     function resetFormUI() {
       ["clue1","clue2","clue3","num1","num2","num3"].forEach(id=>{
@@ -149,19 +135,13 @@
         `${t}: ${v?.score ?? 0}`).join(" | ")}`;
     });
 
-    // teamOrder
-    onValue(teamOrderRef(gameId), (snap) => {
-      teamOrder = snap.val() || teamOrder;
-      updateHeader();
-    });
-
     // round & countdown
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       const newRound = snap.val();
       if (newRound !== currentRound) {
         currentRound = newRound;
-        updateHeader();
+        hdr.textContent = `Round ${currentRound}`;
         submitted = false;
         resetFormUI();
         if (timerStop) { clearInterval(timerStop); timerStop = null; timerEl.textContent = "01:00"; }

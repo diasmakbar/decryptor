@@ -55,17 +55,6 @@
     let teamOrder = [];
     let codeUnsub = null;
 
-    function updateHeader() {
-      const host = getHostTeam(teamOrder, currentRound);
-      const isHost = host && myTeam === host;
-      const otherTeam = getOtherTeam(teamOrder, currentRound);
-      if (isHost) {
-        hdr.textContent = `Round ${currentRound} | You are the clue speaker of Team ${myTeam}, give smart clues! 😤`;
-      } else {
-        hdr.textContent = `Round ${currentRound} | It's the other team, Team ${otherTeam} give clues, discuss with the hunter to guess them! 🧐`;
-      }
-    }
-
     const hdr = document.getElementById("hdr");
     const codeBox = document.getElementById("code");
     const genBtn = document.getElementById("genBtn");
@@ -100,7 +89,6 @@
     onValue(teamOrderRef(gameId), (snap) => {
       teamOrder = snap.val() || teamOrder;
       updateRoleUI();
-      updateHeader();
     });
 
     function attachCodeListener(round) {
@@ -120,7 +108,7 @@
     onValue(currentRoundRef(gameId), (snap) => {
       if (!snap.exists()) return;
       currentRound = snap.val();
-      updateHeader();
+      hdr.textContent = `Round ${currentRound}`;
       codeBox.textContent = "— — —";
       timerBtn.disabled = true;
       readyBtn.disabled = true;
