@@ -80,7 +80,7 @@
     if (wSnap.exists()) {
       let words = wSnap.val().words || [];
       if (!Array.isArray(words)) words = Object.values(words);
-      WordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
+      wordBox.innerHTML = `<div class="wordGrid">` + words.map((w,i)=>`<div class="word">${w}<br/><small>${i+1}</small></div>`).join("") + `</div>`;
     }
 
     // scoreboard
