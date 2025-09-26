@@ -106,7 +106,7 @@
     let timerStop = null;
     const processedRounds = new Set();
     let teamNames = [];
-    let currentRoundData = {};
+    // let currentRoundData = {};
 
     function resetFormUI() {
       ["clue1","clue2","clue3","num1","num2","num3"].forEach(id=>{
@@ -151,7 +151,6 @@
     onValue(roundsRef(gameId), (snap) => {
       const rounds = snap.val() || {};
       for (const [rnum, r] of Object.entries(rounds)) {
-        if (rnum == currentRound) currentRoundData = r;
         const key = `${rnum}:${team}`;
         if (processedRounds.has(key)) continue;
         if (r?.revealed) {
@@ -187,10 +186,6 @@
       const nums = [n1,n2,n3];
       if (nums.every(x => x && !isNaN(Number(x)))) guesses = nums.map(Number);
       updates[`guesses/${team}`] = guesses;
-
-      // Record time spent
-      const timeSpent = currentRoundData.timerStart ? Date.now() - currentRoundData.timerStart : 0;
-      updates[`timeSpent/${team}`] = timeSpent;
 
       await update(roundRef(gameId, currentRound), updates);
       submitted = true;

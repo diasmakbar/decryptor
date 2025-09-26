@@ -76,7 +76,6 @@ export async function maybeScoreCurrentRound(gameId) {
   // -------- Eliminasi & Winner --------
   const eliminated = [];
   let winner = null;
-  const winScore = Math.max(2, teamCount);
 
   // Eliminasi tim ≤ -2
   for (const [t, s] of Object.entries(scores)) {
@@ -86,19 +85,10 @@ export async function maybeScoreCurrentRound(gameId) {
   }
 
   // Cek winner
-  // 1. Ada yang mencapai winScore → menang
-  const candidates = Object.entries(scores).filter(([t, s]) => (s ?? 0) >= winScore);
-  if (candidates.length > 0) {
-    // Sort by score desc, then by totalTime asc (lower time wins)
-    candidates.sort((a, b) => {
-      const [ta, sa] = a;
-      const [tb, sb] = b;
-      if (sa !== sb) return sb - sa; // higher score first
-      const taTime = teamsMap[ta]?.totalTime ?? Infinity;
-      const tbTime = teamsMap[tb]?.totalTime ?? Infinity;
-      return taTime - tbTime; // lower time first
-    });
-    winner = candidates[0][0];
+  // 1. Ada yang +2 → langsung menang
+  const plusTwo = Object.entries(scores).find(([t, s]) => (s ?? 0) >= 2);
+  if (plusTwo) {
+    winner = plusTwo[0];
   } else {
     // 2. Kalau sisa 1 tim yang belum eliminated → dia menang
     const aliveTeams = teamNames.filter(t => !eliminated.includes(t) && !(teamsMap[t]?.eliminated));
@@ -115,12 +105,6 @@ export async function maybeScoreCurrentRound(gameId) {
   // Update skor tiap tim
   teamNames.forEach(t => {
     updates[`teams/${t}/score`] = scores[t] ?? 0;
-  });
-
-  // Accumulate time spent
-  teamNames.forEach(t => {
-    const timeSpent = r.timeSpent?.[t] ?? 0;
-    updates[`teams/${t}/totalTime`] = (teamsMap[t]?.totalTime ?? 0) + timeSpent;
   });
 
   // Tandai eliminated
