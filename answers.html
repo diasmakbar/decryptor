@@ -35,6 +35,7 @@
 </head>
 <body>
   <h1 id="hdr">Round</h1>
+  <h2 id="subHeader"></h2>
 
   <h2>Kata Tim Kamu</h2>
   <div id="myWordBox">Loading kata…</div>
@@ -72,6 +73,7 @@
     const user = params.get("user");
 
     const hdr = document.getElementById("hdr");
+    const subHeader = document.getElementById("subHeader");
     const myWordBox = document.getElementById("myWordBox");
     const clueGrid = document.getElementById("clueGrid");
     const submitBtn = document.getElementById("submitBtn");
@@ -113,13 +115,16 @@
     let teamOrder = [];
 
     function updateHeader() {
+      hdr.textContent = `Round ${currentRound}`;
       const host = getHostTeam(teamOrder, currentRound);
       const isHost = host && team === host;
       const otherTeam = getOtherTeam(teamOrder, currentRound);
       if (isHost) {
-        hdr.textContent = `Round ${currentRound} | It's your team, Team ${team} give clues! Please guess it right 😤`;
+        subHeader.textContent = `It’s ${team}’s turn—teamwork makes the guess work 🧩`;
+      } else if (otherTeam) {
+        subHeader.textContent = `Watch closely! Team ${otherTeam} is dropping their clues. Can you crack 'em? 🤔`;
       } else {
-        hdr.textContent = `Round ${currentRound} | It's the other team, Team ${otherTeam} give clues, guess them! 🧐`;
+        subHeader.textContent = '';
       }
     }
 

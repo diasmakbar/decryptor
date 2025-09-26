@@ -21,6 +21,7 @@
 </head>
 <body>
   <h1 id="hdr">Round</h1>
+  <h2 id="subHeader"></h2>
 
   <div id="wordBox">Loading kata…</div>
 
@@ -56,17 +57,21 @@
     let codeUnsub = null;
 
     function updateHeader() {
+      hdr.textContent = `Round ${currentRound}`;
       const host = getHostTeam(teamOrder, currentRound);
       const isHost = host && myTeam === host;
       const otherTeam = getOtherTeam(teamOrder, currentRound);
       if (isHost) {
-        hdr.textContent = `Round ${currentRound} | You are the clue speaker of Team ${myTeam}, give smart clues! 😤`;
+        subHeader.textContent = `It’s on you! Craft the perfect clue for Team ${myTeam}. Keep it sneaky, keep it smart 🧠`;
+      } else if (otherTeam) {
+        subHeader.textContent = `Other team’s move: Team ${otherTeam} clues are live! Discuss with hunters and crack the code together 🕵️‍♂️`;
       } else {
-        hdr.textContent = `Round ${currentRound} | It's the other team, Team ${otherTeam} give clues, discuss with the hunter to guess them! 🧐`;
+        subHeader.textContent = '';
       }
     }
 
     const hdr = document.getElementById("hdr");
+    const subHeader = document.getElementById("subHeader");
     const codeBox = document.getElementById("code");
     const genBtn = document.getElementById("genBtn");
     const timerBtn = document.getElementById("timerBtn");
