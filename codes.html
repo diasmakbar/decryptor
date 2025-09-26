@@ -34,7 +34,7 @@
   <div id="scoreBox" class="scoreBoard">Scoreboard: loading…</div>
 
   <script type="module">
-    import { onValue, set, get, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+    import { onValue, set, get, update, ref } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
     import { db } from "./firebase.js";
     import {
       currentRoundRef, teamsRef, codeRef, teamOrderRef, teamRef, gameRef,
@@ -100,7 +100,7 @@
         if (isHost && hasCode) codeBox.textContent = snap.val().join(" - ");
         else codeBox.textContent = "— — —";
         setBtnEnabled(timerBtn, isHost && hasCode);
-        setBtnEnabled(readyBtn, hasCode);
+        setBtnEnabled(readyBtn, false);
         maybeScoreCurrentRound(gameId);
       });
     }
@@ -111,6 +111,7 @@
       hdr.textContent = `Round ${currentRound}`;
       codeBox.textContent = "— — —";
       timerBtn.disabled = true;
+      readyBtn.disabled = true;
       updateRoleUI();
       attachCodeListener(currentRound);
     });
@@ -127,6 +128,7 @@
         timerStart: Date.now()
       });
       setBtnEnabled(timerBtn, false);
+      setBtnEnabled(readyBtn, true);
     });
 
     readyBtn.addEventListener("click", async () => {
