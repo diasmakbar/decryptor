@@ -100,7 +100,7 @@
         if (isHost && hasCode) codeBox.textContent = snap.val().join(" - ");
         else codeBox.textContent = "— — —";
         setBtnEnabled(timerBtn, isHost && hasCode);
-        setBtnEnabled(readyBtn, false);
+        // setBtnEnabled(readyBtn, false);
         maybeScoreCurrentRound(gameId);
       });
     }
@@ -117,8 +117,16 @@
       // listen for timer start to enable ready
       onValue(roundRef(gameId, currentRound), (snap) => {
         const r = snap.val() || {};
+        const host = getHostTeam(teamOrder, currentRound);
+        const isHost = host && myTeam === host;
+      if (!isHost) {
         setBtnEnabled(readyBtn, !!r.timerStart);
+        }
       });
+      // onValue(roundRef(gameId, currentRound), (snap) => {
+      //   const r = snap.val() || {};
+      //   setBtnEnabled(readyBtn, !!r.timerStart);
+      // });
     });
 
     genBtn.addEventListener("click", async () => {
